@@ -117,7 +117,7 @@ export class SimpleRAGEngine {
 
   async getRelevantDocuments(query: string, topK: number = 3): Promise<Array<{
     content: string;
-    metadata: any;
+    metadata: unknown;
     score?: number;
   }>> {
     if (!this.isIndexed) {

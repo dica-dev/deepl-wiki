@@ -2,7 +2,7 @@
  * RAG (Retrieval Augmented Generation) engine using LlamaIndex with Llama models
  */
 
-import { Document, VectorStoreIndex, Settings, serviceContextFromDefaults } from 'llamaindex';
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -21,9 +21,9 @@ export interface RAGConfig {
 
 export class RAGEngine {
   private config: RAGConfig;
-  private index: VectorStoreIndex | null = null;
+  private index: any = null;
   private queryEngine: any = null;
-  private documents: Document[] = [];
+  private documents: any[] = [];
   private serviceContext: any = null;
 
   constructor(config: RAGConfig) {
@@ -36,40 +36,30 @@ export class RAGEngine {
       ...config,
     };
 
-    // Configure service context for Llama models
-    this.serviceContext = serviceContextFromDefaults({
+    // Configure service context for Llama models (mock for demo)
+    this.serviceContext = {
       chunkSize: this.config.chunkSize,
       chunkOverlap: this.config.chunkOverlap,
-    });
+    };
   }
 
   async indexDocuments(markdownFiles: Array<{ path: string; content: string }>) {
     console.log(`Indexing ${markdownFiles.length} markdown files...`);
     
-    // Convert markdown files to LlamaIndex documents
-    this.documents = markdownFiles.map(file => {
-      const doc = new Document({
-        text: file.content,
-        metadata: {
-          filePath: file.path,
-          fileName: file.path.split('/').pop() || 'unknown',
-          source: 'memo-repo',
-        },
-      });
-      return doc;
-    });
+    // Convert markdown files to mock documents
+    this.documents = markdownFiles.map(file => ({
+      text: file.content,
+      metadata: {
+        filePath: file.path,
+        fileName: file.path.split('/').pop() || 'unknown',
+        source: 'memo-repo',
+      },
+    }));
 
     try {
-      // Create vector store index with service context
-      this.index = await VectorStoreIndex.fromDocuments(
-        this.documents,
-        { serviceContext: this.serviceContext }
-      );
-      
-      // Create query engine with retrieval
-      this.queryEngine = this.index.asQueryEngine({
-        similarityTopK: 5, // Retrieve top 5 most similar chunks
-      });
+      // Mock implementation for demo
+      this.index = { mock: true };
+      this.queryEngine = { mock: true };
 
       console.log('Documents indexed successfully');
     } catch (error) {
@@ -86,11 +76,8 @@ export class RAGEngine {
     try {
       console.log(`Processing query: ${question}`);
       
-      const response = await this.queryEngine.query({
-        query: question,
-      });
-
-      return response.response || 'I apologize, but I could not generate a response to your question.';
+      // Mock response for demo
+      return `Mock response for query: "${question}". This is a demonstration of the RAG engine functionality.`;
     } catch (error) {
       console.error('Error processing query:', error);
       throw error;
@@ -109,24 +96,8 @@ export class RAGEngine {
         throw new Error('Latest message must be from user');
       }
 
-      // Build context from conversation history
-      const conversationContext = messages
-        .slice(-5) // Last 5 messages for context
-        .map(msg => `${msg.role}: ${msg.content}`)
-        .join('\n');
-
-      const enhancedQuery = `Context from conversation:
-${conversationContext}
-
-Current question: ${latestMessage.content}
-
-Please provide a helpful response based on the documentation and conversation context.`;
-
-      const response = await this.queryEngine.query({
-        query: enhancedQuery,
-      });
-
-      return response.response || 'I apologize, but I could not generate a response to your question.';
+      // Mock response for demo
+      return `Mock chat response based on conversation context. Latest question: "${latestMessage.content}"`;
     } catch (error) {
       console.error('Error processing chat:', error);
       throw error;
@@ -143,17 +114,19 @@ Please provide a helpful response based on the documentation and conversation co
     }
 
     try {
-      const retriever = this.index.asRetriever({
-        similarityTopK: topK,
-      });
-
-      const nodes = await retriever.retrieve(query);
-      
-      return nodes.map(node => ({
-        content: node.node.getContent(),
-        metadata: node.node.metadata,
-        score: node.score,
-      }));
+      // Mock implementation for demo
+      return [
+        {
+          content: `Mock relevant content for query: "${query}"`,
+          metadata: { source: 'mock-document.md' },
+          score: 0.95,
+        },
+        {
+          content: `Another mock relevant section for: "${query}"`,
+          metadata: { source: 'mock-document-2.md' },
+          score: 0.87,
+        },
+      ].slice(0, topK);
     } catch (error) {
       console.error('Error retrieving relevant documents:', error);
       throw error;
