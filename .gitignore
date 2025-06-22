@@ -1,9 +1,13 @@
 .env*
 /deepl-wiki-frontend/.next
 /deepl-wiki-frontend/node_modules
-/deepl-wiki-agents/deepl_wiki_agents.egg-info
-/deepl-wiki-agents/deepl_wiki.db
-/deepl-wiki-agents/chroma_db
+/deepl-wiki-backend/deepl-wiki-agents/deepl_wiki_agents.egg-info
+/deepl-wiki-backend/deepl-wiki-agents/deepl_wiki.db
+/deepl-wiki-backend/deepl-wiki-agents/chroma_db
+/deepl-wiki-backend/deepl_wiki_backend.egg-info
+/deepl-wiki-backend/deepl-wiki-cli/deepl_wiki_cli.egg-info
+/deepl-wiki-backend/deepl_wiki.db
+/deepl-wiki-backend/chroma_db
 **/.venv
 **/.venv/**
 **/__pycache__/
