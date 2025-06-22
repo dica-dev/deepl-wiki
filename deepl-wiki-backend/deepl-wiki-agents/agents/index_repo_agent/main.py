@@ -111,6 +111,13 @@ class IndexRepoAgent:
         )
         return workflow
     
+    def get_output_dir(self) -> str:
+        """Get the output directory for documentation files."""
+        if self.output_dir:
+            return str(Path(self.output_dir).resolve())
+        else:
+            return str(Path.cwd() / "documentation")
+    
     def index_repositories(self, repo_paths: List[str], output_dir: Optional[str] = None, enhanced_features: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Index multiple repositories and generate comprehensive folder-based documentation."""
         # Update enhanced features if provided
