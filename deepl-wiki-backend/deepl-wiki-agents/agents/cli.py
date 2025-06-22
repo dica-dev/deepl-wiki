@@ -176,7 +176,7 @@ def run_add(args):
         }
         
         try:
-            db.add_repository(str(repo_path_obj), repo_metadata)
+            db.add_repository(str(repo_path_obj), str(repo_metadata))
             console.print(f"[green]✓[/green] Added repository: {repo_path_obj.name}")
             added_count += 1
         except Exception as e:
