@@ -128,7 +128,7 @@ class ChatAgent:
             
             response = self.llama_client.chat_completion(
                 messages=messages,
-                temperature=0.7,
+                temperature=0,
                 max_tokens=1000
             )
             

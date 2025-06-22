@@ -286,7 +286,7 @@ Summary:"""
 
             summary = self.llama_client.chat_completion(
                 messages=[{"role": "user", "content": summary_prompt}],
-                temperature=0.3,
+                temperature=0,
                 max_tokens=500
             )
             

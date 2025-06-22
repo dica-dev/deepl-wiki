@@ -698,8 +698,8 @@ General Collection Memo:"""
 
             general_memo = self.llama_client.chat_completion(
                 messages=[{"role": "user", "content": general_memo_prompt}],
-                temperature=0.3,
-                max_tokens=3000
+                temperature=0,
+                max_tokens=6000
             )
             
             new_state = state.copy()
@@ -881,8 +881,8 @@ File Documentation:"""
         try:
             batch_docs = self.llama_client.chat_completion(
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.3,
-                max_tokens=3000
+                temperature=0,
+                max_tokens=6000
             )
             return batch_docs.strip()
         except Exception as e:
