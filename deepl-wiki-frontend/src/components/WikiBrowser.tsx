@@ -73,21 +73,21 @@ export default function WikiBrowser({
       .split('\n')
       .map((line, index) => {
         if (line.startsWith('# ')) {
-          return <h1 key={index} className="text-2xl font-bold mb-4">{line.substring(2)}</h1>;
+          return <h1 key={index} className="text-2xl font-bold mb-4 text-white">{line.substring(2)}</h1>;
         }
         if (line.startsWith('## ')) {
-          return <h2 key={index} className="text-xl font-semibold mb-3">{line.substring(3)}</h2>;
+          return <h2 key={index} className="text-xl font-semibold mb-3 text-gray-100">{line.substring(3)}</h2>;
         }
         if (line.startsWith('### ')) {
-          return <h3 key={index} className="text-lg font-medium mb-2">{line.substring(4)}</h3>;
+          return <h3 key={index} className="text-lg font-medium mb-2 text-gray-200">{line.substring(4)}</h3>;
         }
         if (line.startsWith('- ')) {
-          return <li key={index} className="ml-4 mb-1">{line.substring(2)}</li>;
+          return <li key={index} className="ml-4 mb-1 text-gray-300">{line.substring(2)}</li>;
         }
         if (line.trim() === '') {
           return <br key={index} />;
         }
-        return <p key={index} className="mb-2">{line}</p>;
+        return <p key={index} className="mb-2 text-gray-300">{line}</p>;
       });
   };
 
