@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, MessageSquare, Minimize2, PanelRightOpen, PanelBottomOpen } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Send, Bot, User, Loader2, MessageSquare, Minimize2, PanelRightOpen, PanelBottomOpen, Maximize2, ArrowLeft } from 'lucide-react';
 import { Node as FlowNode, Edge } from 'reactflow';
 import DiagramRenderer from './DiagramRenderer';
 import MarkdownRenderer from './MarkdownRenderer';
+import AdvancedTypingIndicator from './AdvancedTypingIndicator';
 import { WikiDocument } from './WikiBrowser';
 
 export interface ChatMessage {
@@ -28,8 +29,10 @@ interface ChatInterfaceProps {
   onToggleExpanded?: (expanded: boolean) => void;
   isDarkMode?: boolean;
   onDiagramExpand?: (diagramData: { type: 'mermaid' | 'network' | 'wizard'; content?: string; svg?: string; nodes?: FlowNode[]; edges?: Edge[] }) => void;
-  position?: 'bottom' | 'right';
+  position?: 'bottom-middle' | 'bottom-right';
   onPositionToggle?: () => void;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: (fullscreen: boolean) => void;
 }
 
 export default function ChatInterface({ 
@@ -42,8 +45,10 @@ export default function ChatInterface({
   onToggleExpanded,
   isDarkMode = false,
   onDiagramExpand,
-  position = 'bottom',
-  onPositionToggle
+  position = 'bottom-middle',
+  onPositionToggle,
+  isFullscreen = false,
+  onToggleFullscreen
 }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -56,6 +61,7 @@ export default function ChatInterface({
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isMinimized, setIsMinimized] = useState(!isExpanded);
+  const [isCompactMode, setIsCompactMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -68,14 +74,31 @@ export default function ChatInterface({
   }, [messages]);
 
   useEffect(() => {
-    setIsMinimized(!isExpanded);
+    // Determine if we should be in compact mode
+    const shouldBeCompact = position === 'bottom-middle' && !isExpanded;
+    setIsCompactMode(shouldBeCompact);
+    setIsMinimized(!isExpanded && !shouldBeCompact);
+    
     // Scroll to bottom when chat is expanded
     if (isExpanded) {
       setTimeout(() => {
         scrollToBottom();
       }, 100);
     }
-  }, [isExpanded]);
+  }, [isExpanded, position]);
+
+  const handleToggleMinimized = useCallback(() => {
+    const newMinimized = !isMinimized;
+    setIsMinimized(newMinimized);
+    onToggleExpanded?.(!newMinimized);
+    
+    // Scroll to bottom when expanding
+    if (!newMinimized) {
+      setTimeout(() => {
+        scrollToBottom();
+      }, 150);
+    }
+  }, [isMinimized, onToggleExpanded]);
 
   // Click outside to minimize
   useEffect(() => {
@@ -93,20 +116,7 @@ export default function ChatInterface({
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isMinimized]);
-
-  const handleToggleMinimized = () => {
-    const newMinimized = !isMinimized;
-    setIsMinimized(newMinimized);
-    onToggleExpanded?.(!newMinimized);
-    
-    // Scroll to bottom when expanding
-    if (!newMinimized) {
-      setTimeout(() => {
-        scrollToBottom();
-      }, 150);
-    }
-  };
+  }, [isMinimized, handleToggleMinimized]);
 
   const handleDiagramNodeClick = (nodeId: string, document?: WikiDocument) => {
     if (document && onDocumentSelect) {
@@ -154,6 +164,11 @@ export default function ChatInterface({
     const currentInput = input.trim();
     setInput('');
     setIsProcessing(true);
+    
+    // Auto-expand when starting to process (especially important for compact mode)
+    if (isCompactMode || !isExpanded) {
+      onToggleExpanded?.(true);
+    }
 
     try {
       // Check if user is asking for a diagram
@@ -212,51 +227,167 @@ export default function ChatInterface({
     return timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  // Get position classes based on position prop
+  const getPositionClasses = () => {
+    if (isFullscreen) {
+      return 'fixed inset-0 z-50';
+    }
+
+    if (isMinimized) {
+      switch (position) {
+        case 'bottom-right':
+          return 'fixed bottom-6 right-6 z-40';
+        default: // bottom-middle
+          return 'fixed bottom-6 left-1/2 transform -translate-x-1/2 z-40';
+      }
+    }
+
+    if (isCompactMode) {
+      return 'fixed bottom-6 left-1/2 transform -translate-x-1/2 w-[95vw] sm:w-[90vw] max-w-2xl z-50';
+    }
+
+    // Expanded states
+    switch (position) {
+      case 'bottom-right':
+        return 'fixed top-0 right-0 h-full w-96 z-50 animate-in slide-in-from-right-4';
+      default: // bottom-middle
+        return 'fixed bottom-6 left-1/2 transform -translate-x-1/2 w-[95vw] sm:w-[90vw] max-w-4xl z-50 animate-in slide-in-from-bottom-4';
+    }
+  };
+
   // Minimized state
   if (isMinimized) {
     return (
-      <div className={`fixed z-40 transition-all duration-300 ease-out ${
-        position === 'bottom' 
-          ? 'bottom-6 left-1/2 transform -translate-x-1/2' 
-          : 'top-1/2 right-6 transform -translate-y-1/2'
-      }`}>
-        <button
-          onClick={handleToggleMinimized}
-          className={`backdrop-blur-md shadow-lg rounded-xl px-4 py-3 flex items-center gap-3 hover:shadow-xl hover:scale-105 transition-all duration-300 ease-out border transform ${
-            isDarkMode 
-              ? 'bg-gray-800/60 border-gray-600/60 hover:bg-gray-800/80' 
-              : 'bg-white/60 border-gray-200/60 hover:bg-white/80'
-          }`}
-        >
-          <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
-            isDarkMode ? 'bg-white' : 'bg-black'
-          }`}>
-            <MessageSquare className={`w-3 h-3 ${isDarkMode ? 'text-black' : 'text-white'}`} />
-          </div>
-          <div className="text-left">
-            <div className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-              Ask JAVI
+      <div className={`${getPositionClasses()} transition-all duration-300 ease-out`}>
+        <div className={`backdrop-blur-md shadow-lg rounded-xl border transform flex items-center ${
+          isDarkMode 
+            ? 'bg-gray-800/60 border-gray-600/60 hover:bg-gray-800/80' 
+            : 'bg-white/60 border-gray-200/60 hover:bg-white/80'
+        }`}>
+          <button
+            onClick={handleToggleMinimized}
+            className="px-4 py-3 flex items-center gap-3 hover:shadow-xl hover:scale-105 transition-all duration-300 ease-out flex-1"
+            aria-label="Open chat interface"
+          >
+            <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
+              isDarkMode ? 'bg-white' : 'bg-black'
+            }`}>
+              <MessageSquare className={`w-3 h-3 ${isDarkMode ? 'text-black' : 'text-white'}`} />
             </div>
-            <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-              Chat about your docs
+            <div className="text-left">
+              <div className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                Ask JAVI
+              </div>
+              <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                Chat about your docs
+              </div>
             </div>
-          </div>
-          {isLoading && (
-            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+            {isLoading && (
+              <div className="relative">
+                <div className={`w-2 h-2 border border-t-transparent rounded-full indexing-spin ${
+                  isDarkMode ? 'border-blue-400' : 'border-blue-500'
+                }`}></div>
+              </div>
+            )}
+          </button>
+          
+          {/* Position toggle button in minimized state */}
+          {onPositionToggle && (
+            <button
+              onClick={onPositionToggle}
+              className={`p-2 rounded-r-xl transition-all duration-200 hover:scale-110 transform border-l ${
+                isDarkMode 
+                  ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700 border-gray-600' 
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 border-gray-200'
+              }`}
+              title={position === 'bottom-middle' ? 'Move to right corner' : 'Move to bottom center'}
+            >
+              {position === 'bottom-middle' ? (
+                <PanelRightOpen className="w-4 h-4" />
+              ) : (
+                <PanelBottomOpen className="w-4 h-4" />
+              )}
+            </button>
           )}
-        </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Compact input bar mode for bottom-middle position
+  if (isCompactMode) {
+    return (
+      <div className={`${getPositionClasses()} transition-all duration-300 ease-out`}>
+        <div className={`backdrop-blur-md shadow-xl border transition-all duration-300 flex items-center rounded-full ${
+          isDarkMode 
+            ? 'bg-gray-800/70 border-gray-600/60 hover:bg-gray-800/80' 
+            : 'bg-white/70 border-gray-200/60 hover:bg-white/80'
+        }`}>
+          {/* Compact Input Form */}
+          <form onSubmit={handleSubmit} className="flex items-center w-full" role="search" aria-label="Chat with JAVI">
+            <div className="flex-1 relative">
+              <input
+                ref={inputRef}
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={selectedDocument ? `Ask about ${selectedDocument.path.split('/').pop()?.replace(/\.md$/, '') || 'document'}...` : "Ask about your docs..."}
+                disabled={isProcessing || isLoading}
+                aria-label="Type your message"
+                className={`w-full pl-6 pr-4 py-4 rounded-full transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm border-none focus:outline-none bg-transparent ${
+                  isDarkMode 
+                    ? 'text-white placeholder-gray-400' 
+                    : 'text-gray-900 placeholder-gray-500'
+                }`}
+              />
+            </div>
+            
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={!input.trim() || isProcessing || isLoading}
+              className={`mr-2 w-10 h-10 rounded-full transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center hover:scale-110 transform ${
+                isDarkMode 
+                  ? 'bg-white text-black hover:bg-gray-200 disabled:hover:scale-100' 
+                  : 'bg-black text-white hover:bg-gray-800 disabled:hover:scale-100'
+              }`}
+            >
+              {isProcessing ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+            </button>
+
+            {/* Position toggle button */}
+            {onPositionToggle && (
+              <button
+                type="button"
+                onClick={onPositionToggle}
+                className={`mr-2 w-8 h-8 rounded-full transition-all duration-200 hover:scale-110 transform flex items-center justify-center ${
+                  isDarkMode 
+                    ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700' 
+                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                }`}
+                title="Move to right corner"
+              >
+                <PanelRightOpen className="w-3 h-3" />
+              </button>
+            )}
+          </form>
+        </div>
       </div>
     );
   }
 
   return (
-    <div id="chat-interface" className={`fixed z-50 transition-all duration-500 ease-out ${
-      position === 'bottom' 
-        ? 'bottom-6 left-1/2 transform -translate-x-1/2 w-[95vw] sm:w-[90vw] max-w-4xl animate-in slide-in-from-bottom-4'
-        : 'top-0 right-0 h-full w-96 animate-in slide-in-from-right-4'
-    }`}>
-      <div className={`backdrop-blur-md shadow-xl overflow-hidden border transition-all duration-300 ${
-        position === 'bottom' ? 'rounded-xl' : 'rounded-none h-full'
+    <div id="chat-interface" className={`${getPositionClasses()} transition-all duration-500 ease-out`}>
+      <div className={`backdrop-blur-md shadow-xl border transition-all duration-300 flex flex-col ${
+        isFullscreen 
+          ? 'rounded-none h-full' 
+          : position === 'bottom-middle'
+            ? 'rounded-xl overflow-hidden' 
+            : 'rounded-none h-full'
       } ${
         isDarkMode 
           ? 'bg-gray-800/70 border-gray-600/60 hover:bg-gray-800/80' 
@@ -286,55 +417,109 @@ export default function ChatInterface({
             </div>
 
             <div className="flex items-center gap-2">
-              {isLoading && (
-                <div className={`flex items-center gap-2 px-2 py-1 rounded-full ${
-                  isDarkMode ? 'bg-blue-900/30' : 'bg-blue-50'
+              {isLoading && !isFullscreen && (
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all duration-300 indexing-glow ${
+                  isDarkMode 
+                    ? 'bg-blue-900/30 border-blue-700/50' 
+                    : 'bg-blue-50 border-blue-200/50'
                 }`}>
-                  <Loader2 className="w-3 h-3 animate-spin text-blue-500" />
-                  <span className={`text-xs font-medium ${
+                  <div className="relative flex items-center">
+                    <div className={`w-3 h-3 border border-t-transparent rounded-full indexing-spin ${
+                      isDarkMode ? 'border-blue-400' : 'border-blue-500'
+                    }`}></div>
+                  </div>
+                  <span className={`text-xs font-bold ${
                     isDarkMode ? 'text-blue-400' : 'text-blue-700'
                   }`}>
-                    Indexing...
+                    Indexing
                   </span>
+                  <div className="flex items-center gap-0.5">
+                    <div className={`w-1 h-1 rounded-full indexing-dots ${
+                      isDarkMode ? 'bg-blue-400' : 'bg-blue-500'
+                    }`}></div>
+                    <div className={`w-1 h-1 rounded-full indexing-dots ${
+                      isDarkMode ? 'bg-blue-400' : 'bg-blue-500'
+                    }`} style={{animationDelay: '0.3s'}}></div>
+                    <div className={`w-1 h-1 rounded-full indexing-dots ${
+                      isDarkMode ? 'bg-blue-400' : 'bg-blue-500'
+                    }`} style={{animationDelay: '0.6s'}}></div>
+                  </div>
                 </div>
               )}
-              {onPositionToggle && (
+              
+              {isFullscreen ? (
+                /* Large prominent return button for fullscreen */
                 <button
-                  onClick={onPositionToggle}
-                  className={`p-1 rounded transition-all duration-200 hover:scale-110 transform ${
+                  onClick={() => onToggleFullscreen?.(false)}
+                  className={`flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-200 hover:scale-105 transform shadow-lg font-semibold text-sm ${
                     isDarkMode 
-                      ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700' 
-                      : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                      ? 'bg-gradient-to-r from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-500 text-white border border-gray-500' 
+                      : 'bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 text-gray-900 border border-gray-300'
                   }`}
-                  title={position === 'bottom' ? 'Move to right panel' : 'Move to bottom overlay'}
+                  title="Return to normal view"
                 >
-                  {position === 'bottom' ? (
-                    <PanelRightOpen className="w-4 h-4" />
-                  ) : (
-                    <PanelBottomOpen className="w-4 h-4" />
-                  )}
+                  <ArrowLeft className="w-5 h-5" />
+                  Return
                 </button>
+              ) : (
+                /* Normal mode buttons */
+                <>
+                  {onToggleFullscreen && (
+                    <button
+                      onClick={() => onToggleFullscreen?.(true)}
+                      className={`p-1 rounded transition-all duration-200 hover:scale-110 transform ${
+                        isDarkMode 
+                          ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700' 
+                          : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                      }`}
+                      title="Enter fullscreen"
+                    >
+                      <Maximize2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  {onPositionToggle && (
+                    <button
+                      onClick={onPositionToggle}
+                      className={`p-1 rounded transition-all duration-200 hover:scale-110 transform ${
+                        isDarkMode 
+                          ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700' 
+                          : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                      }`}
+                      title={position === 'bottom-middle' ? 'Move to right panel' : 'Move to bottom center'}
+                    >
+                      {position === 'bottom-middle' ? (
+                        <PanelRightOpen className="w-4 h-4" />
+                      ) : (
+                        <PanelBottomOpen className="w-4 h-4" />
+                      )}
+                    </button>
+                  )}
+                  <button
+                    onClick={handleToggleMinimized}
+                    className={`p-1 rounded transition-all duration-200 hover:scale-110 transform ${
+                      isDarkMode 
+                        ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700' 
+                        : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                    }`}
+                    title="Minimize chat"
+                  >
+                    <Minimize2 className="w-4 h-4" />
+                  </button>
+                </>
               )}
-              <button
-                onClick={handleToggleMinimized}
-                className={`p-1 rounded transition-all duration-200 hover:scale-110 transform ${
-                  isDarkMode 
-                    ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700' 
-                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                <Minimize2 className="w-4 h-4" />
-              </button>
             </div>
           </div>
         </div>
 
-        {/* Chat Content */}
-        <div className={position === 'bottom' ? "h-80 sm:h-80 max-h-[60vh]" : "flex-1"}>
-          <div className="h-full flex flex-col">
-            {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-              {messages.map((message) => (
+        {/* Chat Messages - Improved scrolling */}
+        <div className={`flex-1 overflow-y-auto px-4 py-4 space-y-4 min-h-0 ${
+          isFullscreen 
+            ? "" 
+            : position === 'bottom-middle'
+              ? "max-h-60" 
+              : ""
+        }`}>
+          {messages.map((message) => (
                 <div
                   key={message.id}
                   className={`flex items-start gap-3 ${
@@ -400,46 +585,17 @@ export default function ChatInterface({
               ))}
               
               {isProcessing && (
-                <div className="flex items-start gap-3">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                    isDarkMode ? 'bg-gray-700' : 'bg-gray-200'
-                  }`}>
-                    <Bot className={`w-3 h-3 animate-pulse ${
-                      isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                    }`} />
-                  </div>
-                  <div className={`rounded-lg px-3 py-2 ${
-                    isDarkMode ? 'bg-gray-700' : 'bg-gray-100'
-                  }`}>
-                    <div className="flex items-center gap-2">
-                      <div className="flex gap-1">
-                        <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${
-                          isDarkMode ? 'bg-gray-400' : 'bg-gray-400'
-                        }`}></div>
-                        <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${
-                          isDarkMode ? 'bg-gray-400' : 'bg-gray-400'
-                        }`} style={{animationDelay: '0.2s'}}></div>
-                        <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${
-                          isDarkMode ? 'bg-gray-400' : 'bg-gray-400'
-                        }`} style={{animationDelay: '0.4s'}}></div>
-                      </div>
-                      <span className={`text-sm ${
-                        isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                      }`}>
-                        JAVI is thinking...
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                <AdvancedTypingIndicator 
+                  isDarkMode={isDarkMode} 
+                  userName="JAVI" 
+                />
               )}
-              
-              <div ref={messagesEndRef} />
-            </div>
-          </div>
+          
+          <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Section */}
-        <div className={`border-t p-4 ${
+        {/* Input Section - Positioned at bottom with no whitespace */}
+        <div className={`border-t p-4 mt-auto ${
           isDarkMode 
             ? 'border-gray-600/60 bg-gray-800/30' 
             : 'border-gray-200/60 bg-white/30'
