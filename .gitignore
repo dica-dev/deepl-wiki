@@ -1,1 +1,7 @@
 .env
+/deepl-wiki-agents/deepl_wiki_agents.egg-info
+/deepl-wiki-agents/deepl_wiki.db
+/deepl-wiki-agents/chroma_db
+**/.venv
+**/.venv/**
+**/__pycache__
