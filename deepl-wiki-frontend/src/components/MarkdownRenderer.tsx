@@ -4,15 +4,21 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
+import MermaidDiagram from './MermaidDiagram';
 import 'highlight.js/styles/github.css';
 
 interface MarkdownRendererProps {
   content: string;
   className?: string;
   isDarkMode?: boolean;
+  onDiagramExpand?: (data: {
+    type: 'mermaid' | 'network' | 'wizard';
+    content?: string;
+    svg?: string;
+  }) => void;
 }
 
-export default function MarkdownRenderer({ content, className = "", isDarkMode = false }: MarkdownRendererProps) {
+export default function MarkdownRenderer({ content, className = "", isDarkMode = false, onDiagramExpand }: MarkdownRendererProps) {
   const isChatMessage = className.includes('chat-message');
   
   return (
@@ -265,6 +271,23 @@ export default function MarkdownRenderer({ content, className = "", isDarkMode =
           ),
           code: ({ children, className }) => {
             const inline = !className;
+            const match = /language-(\w+)/.exec(className || '');
+            const language = match ? match[1] : '';
+            const code = String(children).replace(/\n$/, '');
+
+            // Handle Mermaid diagrams
+            if (language === 'mermaid') {
+              return (
+                <div className="my-6">
+                  <MermaidDiagram 
+                    chart={code} 
+                    isDarkMode={isDarkMode} 
+                    onExpand={onDiagramExpand}
+                  />
+                </div>
+              );
+            }
+
             if (inline) {
               return (
                 <code className={isChatMessage 

@@ -139,7 +139,7 @@ Analyze the repository contents and customize the sections based on what you fin
         try:
             structure_response = self.llama_client.chat_completion(
                 messages=[{"role": "user", "content": structure_prompt}],
-                temperature=0.3,
+                temperature=0,
                 max_tokens=2000
             )
             
@@ -300,7 +300,7 @@ Section Content:"""
         try:
             content = self.llama_client.chat_completion(
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.3,
+                temperature=0,
                 max_tokens=3000
             )
             return content.strip()
@@ -1043,7 +1043,7 @@ README Content:"""
         try:
             readme_content = self.llama_client.chat_completion(
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.3,
+                temperature=0,
                 max_tokens=4000
             )
             return readme_content

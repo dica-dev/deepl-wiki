@@ -15,7 +15,7 @@ import { SimpleRAGEngine } from '@/lib/simple-rag-engine';
 import { mockDocuments, MockRAGEngine } from '@/lib/mock-data';
 import { apiClient } from '@/lib/api-client';
 import { createFileSystemService, LocalFileTree, LocalMarkdownFile, FileSystemService } from '@/lib/local-file-system';
-import { BookOpen, AlertCircle, Search, FileText, Folder, Moon, Sun, X, Network, Copy, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { BookOpen, AlertCircle, Search, FileText, Folder, Moon, Sun, X, Network, Copy, Download, ChevronLeft, ChevronRight, GitBranch, Package } from 'lucide-react';
 import { ReactFlow, Background, Controls, Node as FlowNode, Edge } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -662,62 +662,127 @@ export default function Home() {
             {/* Document Tree */}
             <div className="flex-1 overflow-y-auto p-3 space-y-1">
               {useLocalFiles && localFileTree ? (
-                // Local files mode - show directory structure
+                // Local files mode - show repository-aware directory structure
                 (() => {
-                  const buildTreeFromFiles = (files: LocalMarkdownFile[]) => {
-                    const tree: { [key: string]: LocalMarkdownFile[] } = {};
+                  const renderDirectory = (dir: any, depth: number = 0): React.ReactNode[] => {
+                    const elements: React.ReactNode[] = [];
                     
-                    files.forEach(file => {
-                      const pathParts = file.relativePath.split('/');
-                      const folder = pathParts.length > 1 ? pathParts[0] : 'Root';
-                      if (!tree[folder]) tree[folder] = [];
-                      tree[folder].push(file);
+                    // Filter files based on search
+                    const filteredFiles = dir.files.filter((file: LocalMarkdownFile) => 
+                      !searchTerm.trim() || 
+                      file.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      file.relativePath.toLowerCase().includes(searchTerm.toLowerCase())
+                    );
+
+                    // Filter subdirectories that have files (recursively)
+                    const filteredSubdirs = dir.subdirectories.filter((subdir: any) => {
+                      const hasFiles = (d: any): boolean => {
+                        const hasMatchingFiles = d.files.some((file: LocalMarkdownFile) => 
+                          !searchTerm.trim() || 
+                          file.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          file.relativePath.toLowerCase().includes(searchTerm.toLowerCase())
+                        );
+                        return hasMatchingFiles || d.subdirectories.some(hasFiles);
+                      };
+                      return hasFiles(subdir);
                     });
-                    
-                    return tree;
+
+                    // Only show directory if it has files or subdirectories
+                    if (filteredFiles.length === 0 && filteredSubdirs.length === 0) {
+                      return [];
+                    }
+
+                    // Directory header
+                    const getDirectoryIcon = () => {
+                      if (dir.isRepository) {
+                        switch (dir.repositoryType) {
+                          case 'git':
+                            return <GitBranch className={`w-4 h-4 ${isDarkMode ? 'text-green-400' : 'text-green-500'}`} />;
+                          case 'npm':
+                            return <Package className={`w-4 h-4 ${isDarkMode ? 'text-blue-400' : 'text-blue-500'}`} />;
+                          default:
+                            return <Folder className={`w-4 h-4 ${isDarkMode ? 'text-purple-400' : 'text-purple-500'}`} />;
+                        }
+                      }
+                      return <Folder className={`w-4 h-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />;
+                    };
+
+                    const getDirectoryLabel = () => {
+                      if (dir.isRepository) {
+                        const typeLabel = dir.repositoryType === 'git' ? 'Git' : dir.repositoryType === 'npm' ? 'NPM' : 'Repo';
+                        return (
+                          <div className="flex items-center gap-2">
+                            <span>{dir.name}</span>
+                            <span className={`text-xs px-1.5 py-0.5 rounded transition-colors duration-200 ${
+                              dir.repositoryType === 'git'
+                                ? isDarkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
+                                : dir.repositoryType === 'npm'
+                                ? isDarkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'
+                                : isDarkMode ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700'
+                            }`}>
+                              {typeLabel}
+                            </span>
+                          </div>
+                        );
+                      }
+                      return dir.name;
+                    };
+
+                    elements.push(
+                      <div key={`${dir.path}-${depth}`} className="group" style={{ marginLeft: `${depth * 12}px` }}>
+                        <div className={`flex items-center gap-2 p-2 text-sm font-medium transition-colors duration-200 ${
+                          isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                        }`}>
+                          {getDirectoryIcon()}
+                          {getDirectoryLabel()}
+                          <span className={`ml-auto text-xs px-2 py-1 rounded transition-colors duration-200 ${
+                            isDarkMode 
+                              ? 'bg-gray-700 text-gray-300' 
+                              : 'bg-gray-200 text-gray-600'
+                          }`}>
+                            {filteredFiles.length}
+                          </span>
+                        </div>
+                      </div>
+                    );
+
+                    // Files
+                    if (filteredFiles.length > 0) {
+                      elements.push(
+                        <div key={`${dir.path}-files-${depth}`} className="space-y-1" style={{ marginLeft: `${(depth + 1) * 12 + 24}px` }}>
+                          {filteredFiles.map((file: LocalMarkdownFile) => (
+                            <button
+                              key={file.relativePath}
+                              onClick={() => handleLocalFileSelect(file)}
+                              className={`flex items-center gap-2 w-full p-2 text-left rounded transition-all duration-200 text-sm ${
+                                selectedDocument?.sha === file.relativePath
+                                  ? isDarkMode 
+                                    ? 'bg-blue-900/30 text-blue-300 font-medium border border-blue-700/50'
+                                    : 'bg-blue-50 text-blue-700 font-medium border border-blue-200'
+                                  : isDarkMode
+                                    ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-200'
+                                    : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
+                              }`}
+                            >
+                              <FileText className="w-3 h-3" />
+                              <span className="truncate" title={file.relativePath}>
+                                {file.name.replace(/\.md$/, '')}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    }
+
+                    // Subdirectories (recursive)
+                    filteredSubdirs.forEach((subdir: any) => {
+                      elements.push(...renderDirectory(subdir, depth + 1));
+                    });
+
+                    return elements;
                   };
 
-                  const fileTree = buildTreeFromFiles(filteredLocalFiles);
-                  
-                  return Object.entries(fileTree).map(([folder, files]) => (
-                    <div key={folder} className="group">
-                      <div className={`flex items-center gap-2 p-2 text-sm font-medium transition-colors duration-200 ${
-                        isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                      }`}>
-                        <Folder className={`w-4 h-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
-                        <span>{folder}</span>
-                        <span className={`ml-auto text-xs px-2 py-1 rounded transition-colors duration-200 ${
-                          isDarkMode 
-                            ? 'bg-gray-700 text-gray-300' 
-                            : 'bg-gray-200 text-gray-600'
-                        }`}>
-                          {files.length}
-                        </span>
-                      </div>
-                      <div className="ml-6 space-y-1">
-                        {files.map((file) => (
-                          <button
-                            key={file.relativePath}
-                            onClick={() => handleLocalFileSelect(file)}
-                            className={`flex items-center gap-2 w-full p-2 text-left rounded transition-all duration-200 text-sm ${
-                              selectedDocument?.sha === file.relativePath
-                                ? isDarkMode 
-                                  ? 'bg-blue-900/30 text-blue-300 font-medium border border-blue-700/50'
-                                  : 'bg-blue-50 text-blue-700 font-medium border border-blue-200'
-                                : isDarkMode
-                                  ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-200'
-                                  : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
-                            }`}
-                          >
-                            <FileText className="w-3 h-3" />
-                            <span className="truncate" title={file.relativePath}>
-                              {file.name.replace(/\.md$/, '')}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ));
+                  return renderDirectory(localFileTree.structure);
                 })()
               ) : (
                 // Demo mode - use original structure
@@ -928,7 +993,11 @@ export default function Home() {
                   <div className="flex gap-8 p-6 pb-32">
                     {/* Main Content */}
                     <div className="flex-1 max-w-4xl">
-                      <MarkdownRenderer content={selectedDocument.content} isDarkMode={isDarkMode} />
+                      <MarkdownRenderer 
+                        content={selectedDocument.content} 
+                        isDarkMode={isDarkMode}
+                        onDiagramExpand={setExpandedDiagram}
+                      />
                     </div>
                     
                     {/* Table of Contents - Right Sidebar */}

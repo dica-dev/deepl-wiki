@@ -14,6 +14,8 @@ export interface LocalDirectory {
   path: string;
   files: LocalMarkdownFile[];
   subdirectories: LocalDirectory[];
+  isRepository?: boolean;
+  repositoryType?: 'git' | 'npm' | 'unknown';
 }
 
 export interface LocalFileTree {
@@ -51,10 +53,40 @@ const isFileSystemAccessSupported = () => {
   return typeof window !== 'undefined' && 'showDirectoryPicker' in window;
 };
 
+// Detect repository type by checking for common repository indicators
+const detectRepositoryType = async (dirHandle: FileSystemDirectoryHandle): Promise<{ isRepository: boolean; type: 'git' | 'npm' | 'unknown' }> => {
+  let hasGit = false;
+  let hasPackageJson = false;
+  
+  try {
+    for await (const [name] of dirHandle.entries()) {
+      if (name === '.git') {
+        hasGit = true;
+      } else if (name === 'package.json') {
+        hasPackageJson = true;
+      }
+      
+      // Early exit if we found what we need
+      if (hasGit && hasPackageJson) break;
+    }
+  } catch (error) {
+    // Ignore permission errors
+  }
+  
+  if (hasGit) {
+    return { isRepository: true, type: 'git' };
+  } else if (hasPackageJson) {
+    return { isRepository: true, type: 'npm' };
+  }
+  
+  return { isRepository: false, type: 'unknown' };
+};
+
 // Build directory tree from FileSystemDirectoryHandle
 const buildDirectoryTree = async (
   dirHandle: FileSystemDirectoryHandle,
-  basePath: string = '',
+  parentPath: string = '',
+  fileHandles: Map<string, FileSystemFileHandle>,
   maxDepth: number = 10,
   currentDepth: number = 0
 ): Promise<{ directory: LocalDirectory; totalFiles: number }> => {
@@ -62,7 +94,7 @@ const buildDirectoryTree = async (
     return {
       directory: {
         name: dirHandle.name,
-        path: basePath + dirHandle.name,
+        path: parentPath + dirHandle.name,
         files: [],
         subdirectories: []
       },
@@ -73,6 +105,9 @@ const buildDirectoryTree = async (
   const files: LocalMarkdownFile[] = [];
   const subdirectories: LocalDirectory[] = [];
   let totalFiles = 0;
+
+  // Detect if this directory is a repository
+  const { isRepository, type: repositoryType } = await detectRepositoryType(dirHandle);
 
   try {
     for await (const [name, handle] of dirHandle.entries()) {
@@ -85,10 +120,18 @@ const buildDirectoryTree = async (
       if (handle.kind === 'file' && name.toLowerCase().endsWith('.md')) {
         const fileHandle = handle as FileSystemFileHandle;
         const file = await fileHandle.getFile();
+        
+        // Build relative path consistently
+        const relativePath = parentPath ? `${parentPath}${dirHandle.name}/${name}` : `${dirHandle.name}/${name}`;
+        
+        // Store file handle for content reading
+        fileHandles.set(relativePath, fileHandle);
+        console.log('Added file handle for:', relativePath);
+        
         files.push({
           name: name,
-          path: basePath + dirHandle.name + '/' + name,
-          relativePath: basePath ? basePath.replace(/^\//, '') + dirHandle.name + '/' + name : name,
+          path: relativePath,
+          relativePath: relativePath,
           size: file.size,
           lastModified: file.lastModified
         });
@@ -96,7 +139,8 @@ const buildDirectoryTree = async (
       } else if (handle.kind === 'directory') {
         const { directory: subDir, totalFiles: subFiles } = await buildDirectoryTree(
           handle as FileSystemDirectoryHandle,
-          basePath + dirHandle.name + '/',
+          parentPath + dirHandle.name + '/',
+          fileHandles,
           maxDepth,
           currentDepth + 1
         );
@@ -113,9 +157,11 @@ const buildDirectoryTree = async (
   return {
     directory: {
       name: dirHandle.name,
-      path: basePath + dirHandle.name,
+      path: parentPath + dirHandle.name,
       files: files.sort((a, b) => a.name.localeCompare(b.name)),
-      subdirectories: subdirectories.sort((a, b) => a.name.localeCompare(b.name))
+      subdirectories: subdirectories.sort((a, b) => a.name.localeCompare(b.name)),
+      isRepository,
+      repositoryType
     },
     totalFiles
   };
@@ -160,17 +206,18 @@ export class LocalFileSystemService implements FileSystemService {
         throw new Error('No directory selected');
       }
 
-      // Build file tree
-      const { directory, totalFiles } = await buildDirectoryTree(this.directoryHandle);
+      // Build file tree and collect file handles at the same time
+      const { directory, totalFiles } = await buildDirectoryTree(
+        this.directoryHandle, 
+        '', 
+        this.fileHandles
+      );
       
       this.fileTree = {
         rootPath: this.directoryHandle.name,
         totalFiles,
         structure: directory
       };
-
-      // Store file handles for later content reading
-      await this.indexFileHandles(this.directoryHandle, '');
 
       return this.fileTree;
     } catch (error) {
@@ -182,33 +229,15 @@ export class LocalFileSystemService implements FileSystemService {
     }
   }
 
-  // Index file handles for content reading
-  private async indexFileHandles(dirHandle: FileSystemDirectoryHandle, basePath: string): Promise<void> {
-    try {
-      for await (const [name, handle] of dirHandle.entries()) {
-        if (name.startsWith('.') || 
-            ['node_modules', '__pycache__', 'venv', '.git', 'dist', 'build'].includes(name)) {
-          continue;
-        }
-
-        const fullPath = basePath + (basePath ? '/' : '') + name;
-
-        if (handle.kind === 'file' && name.toLowerCase().endsWith('.md')) {
-          this.fileHandles.set(fullPath, handle as FileSystemFileHandle);
-        } else if (handle.kind === 'directory') {
-          await this.indexFileHandles(handle as FileSystemDirectoryHandle, fullPath);
-        }
-      }
-    } catch (error) {
-      console.warn('Error indexing file handles:', error);
-    }
-  }
 
   // Read content of a specific file
   async readFileContent(relativePath: string): Promise<string> {
+    console.log('Attempting to read file:', relativePath);
+    console.log('Available file handles:', Array.from(this.fileHandles.keys()));
+    
     const fileHandle = this.fileHandles.get(relativePath);
     if (!fileHandle) {
-      throw new Error(`File not found: ${relativePath}`);
+      throw new Error(`File not found: ${relativePath}. Available files: ${Array.from(this.fileHandles.keys()).join(', ')}`);
     }
 
     return await readFileContent(fileHandle);

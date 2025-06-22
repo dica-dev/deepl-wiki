@@ -12,3 +12,5 @@
 **/.venv
 **/.venv/**
 **/__pycache__/
+**/deepl_wiki.db
+**/chroma_db
