@@ -583,3 +583,56 @@ Total repositories: {len(repositories)}
             return "REST/SOAP APIs, Database connections, Maven dependencies"
         else:
             return "Configuration files, Command line interfaces, Data files"
+
+    async def get_mono_repo_path(self) -> Optional[str]:
+        """Get the path to the generated mono repository.
+        
+        Returns:
+            Path to the mono repository if it exists, None otherwise
+        """
+        # Default mono repo path
+        default_path = Path("./mono_repo_docs")
+        
+        if default_path.exists() and default_path.is_dir():
+            return str(default_path.absolute())
+        
+        # Try alternative locations
+        alternative_paths = [
+            Path("../mono_repo_docs"),
+            Path("./docs"),
+            Path("../docs"),
+            Path("./generated_docs")
+        ]
+        
+        for path in alternative_paths:
+            if path.exists() and path.is_dir():
+                return str(path.absolute())
+        
+        return None
+
+    async def generate_or_get_mono_repo(self, repositories: List[Dict[str, Any]], general_memo: str = "", output_dir: str = "./mono_repo_docs") -> str:
+        """Generate a mono repo or return existing one.
+        
+        Args:
+            repositories: List of repository data
+            general_memo: General memo about the repositories
+            output_dir: Output directory for the mono repo
+            
+        Returns:
+            Path to the mono repository
+        """
+        output_path = Path(output_dir)
+        
+        # If mono repo already exists and is recent, return it
+        if output_path.exists() and output_path.is_dir():
+            # Check if it was generated recently (within last hour)
+            try:
+                stats = output_path.stat()
+                import time
+                if time.time() - stats.st_mtime < 3600:  # 1 hour
+                    return str(output_path.absolute())
+            except:
+                pass
+        
+        # Generate new mono repo
+        return self.generate_mono_repo(output_dir, repositories, general_memo)

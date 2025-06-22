@@ -21,7 +21,30 @@ An interactive documentation management system that uses AI agents to index repo
 
 ## Installation
 
-### 1. Install uv
+### Quick Setup (Recommended)
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd deepl-wiki/deepl-wiki-backend
+
+# Run the automated setup script
+python run_setup.py
+```
+
+This will automatically:
+- Install uv if needed
+- Create virtual environment
+- Install all dependencies
+- Set up CLI package
+- Create environment configuration template
+- Verify installation
+
+### Manual Setup
+
+If you prefer manual installation or the automated script fails:
+
+#### 1. Install uv
 
 If you don't have `uv` installed, install it first:
 
@@ -35,27 +58,30 @@ powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-### 2. Clone the Repository
+#### 2. Clone the Repository
 
 ```bash
 git clone <repository-url>
 cd deepl-wiki/deepl-wiki-backend
 ```
 
-### 3. Create and Activate Virtual Environment with uv
+#### 3. Create and Activate Virtual Environment with uv
 
 ```bash
-# Create virtual environment and install dependencies
-uv sync
+# Create virtual environment
+uv venv
 
 # Activate the virtual environment
 # Windows:
 .venv\Scripts\activate
 # macOS/Linux:
 source .venv/bin/activate
+
+# Install dependencies
+uv pip install -r requirements.txt
 ```
 
-### 4. Install CLI Package
+#### 4. Install CLI Package
 
 ```bash
 uv pip install -e ./deepl-wiki-cli
@@ -113,6 +139,30 @@ deepl-wiki stats
 deepl-wiki push
 ```
 
+### REST API
+
+The project includes a FastAPI-based REST API for web integration:
+
+```bash
+# Run the API server
+uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+**Key API Endpoints:**
+- `GET /api/v1/health` - System health check
+- `POST /api/v1/chat` - Chat with AI agents (supports session management)
+- `GET /api/v1/repositories` - List all tracked repositories
+- `POST /api/v1/repositories` - Add new repository
+- `POST /api/v1/repositories/index` - Index repositories in background
+- `GET /api/v1/files/mono-repo` - Get mono repository file tree structure
+- `GET /api/v1/files/content` - Get file content with encoding detection
+- `GET /api/v1/files/search` - Search files across repositories
+
+**API Documentation:**
+- **Interactive docs**: http://localhost:8000/docs
+- **Alternative docs**: http://localhost:8000/redoc
+- **Complete route reference**: [API_ROUTES.md](API_ROUTES.md)
+
 ### Available Commands
 
 | Command | Description |
@@ -145,9 +195,16 @@ python deepl_wiki_agents.py --help
 deepl-wiki-backend/
 ├── requirements.txt          # Python dependencies
 ├── README.md                # This file
+├── API_ROUTES.md            # Complete API route documentation
+├── run_setup.py             # Automated setup script
+├── api/                     # FastAPI application
+│   ├── main.py             # FastAPI app configuration
+│   ├── routes/             # API route handlers
+│   ├── models/             # Pydantic models
+│   └── utils/              # Utility functions
 ├── deepl-wiki-agents/       # Core agent functionality
-│   ├── agents/              # AI agents implementation
-│   ├── shared/              # Shared utilities
+│   ├── agents/             # AI agents implementation
+│   ├── shared/             # Shared utilities
 │   └── chroma_db/          # Vector database storage
 ├── deepl-wiki-cli/         # Command-line interface
 │   ├── cli/                # CLI implementation

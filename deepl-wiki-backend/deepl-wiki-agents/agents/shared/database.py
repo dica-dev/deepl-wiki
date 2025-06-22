@@ -262,3 +262,126 @@ class DatabaseManager:
                 "total_chat_sessions": total_sessions,
                 "database_path": self.db_path
             }
+
+    def get_all_repositories(self) -> List[Dict[str, Any]]:
+        """Get all repositories for API compatibility.
+        
+        Returns:
+            List of repository information compatible with API schema
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT rowid, repo_path, repo_name, primary_language, file_count,
+                       total_size, last_indexed, status, metadata
+                FROM repositories
+                ORDER BY last_indexed DESC
+            """)
+            
+            repositories = []
+            for row in cursor.fetchall():
+                row_id, repo_path, repo_name, primary_language, file_count, total_size, last_indexed, status, metadata_json = row
+                metadata = json.loads(metadata_json) if metadata_json else {}
+                
+                repositories.append({
+                    "id": row_id,
+                    "path": repo_path,
+                    "name": repo_name,
+                    "description": metadata.get("description"),
+                    "status": status or "active",
+                    "indexed_at": last_indexed
+                })
+            
+            return repositories
+
+    def add_repository(self, path: str, name: str = None, description: str = None) -> int:
+        """Add a repository with API-compatible signature.
+        
+        Args:
+            path: Repository path
+            name: Optional repository name
+            description: Optional repository description
+            
+        Returns:
+            Repository ID
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            metadata = {}
+            if description:
+                metadata["description"] = description
+            
+            cursor.execute("""
+                INSERT INTO repositories 
+                (repo_path, repo_name, primary_language, file_count, total_size, status, metadata)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                path,
+                name or Path(path).name,
+                "Unknown",
+                0,
+                0,
+                "active",
+                json.dumps(metadata)
+            ))
+            
+            repo_id = cursor.lastrowid
+            conn.commit()
+            return repo_id
+
+    def get_repository(self, repo_id: int) -> Optional[Dict[str, Any]]:
+        """Get a specific repository by ID.
+        
+        Args:
+            repo_id: Repository ID
+            
+        Returns:
+            Repository information or None if not found
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT rowid, repo_path, repo_name, primary_language, file_count,
+                       total_size, last_indexed, status, metadata
+                FROM repositories
+                WHERE rowid = ?
+            """, (repo_id,))
+            
+            row = cursor.fetchone()
+            if not row:
+                return None
+            
+            row_id, repo_path, repo_name, primary_language, file_count, total_size, last_indexed, status, metadata_json = row
+            metadata = json.loads(metadata_json) if metadata_json else {}
+            
+            return {
+                "id": row_id,
+                "path": repo_path,
+                "name": repo_name,
+                "description": metadata.get("description"),
+                "status": status or "active",
+                "indexed_at": last_indexed
+            }
+
+    def remove_repository(self, repo_id: int) -> bool:
+        """Remove a repository by ID.
+        
+        Args:
+            repo_id: Repository ID to remove
+            
+        Returns:
+            True if repository was removed, False if not found
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("DELETE FROM repositories WHERE rowid = ?", (repo_id,))
+            
+            if cursor.rowcount > 0:
+                conn.commit()
+                return True
+            
+            return False
