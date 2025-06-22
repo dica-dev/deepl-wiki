@@ -3,11 +3,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import ChatInterface from '@/components/ChatInterface';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
+import TableOfContents from '@/components/TableOfContents';
+import ParticleBackground from '@/components/ParticleBackground';
+import KeyboardShortcuts from '@/components/KeyboardShortcuts';
+import ErrorBoundary from '@/components/ErrorBoundary';
+import LoadingSpinner from '@/components/LoadingSpinner';
 import { WikiDocument } from '@/components/WikiBrowser';
-import { MarkdownMonitor, MarkdownFile } from '@/lib/markdown-monitor';
+import { MarkdownMonitor } from '@/lib/markdown-monitor';
 import { SimpleRAGEngine } from '@/lib/simple-rag-engine';
 import { mockDocuments, MockRAGEngine } from '@/lib/mock-data';
-import { BookOpen, Settings, Loader2, AlertCircle, Play, Search, FileText, Folder, Moon, Sun, X, Network, Copy, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { BookOpen, AlertCircle, Search, FileText, Folder, Moon, Sun, X, Network, Copy, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ReactFlow, Background, Controls, Node as FlowNode, Edge } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -17,19 +22,13 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [ragEngine, setRagEngine] = useState<SimpleRAGEngine | null>(null);
-  const [monitor, setMonitor] = useState<MarkdownMonitor | null>(null);
+  const [monitor] = useState<MarkdownMonitor | null>(null);
   const [isChatExpanded, setIsChatExpanded] = useState(false);
-  const [config, setConfig] = useState({
-    githubToken: '',
-    llamaApiKey: '',
-    repoOwner: '',
-    repoName: '',
-  });
-  const [useMockData, setUseMockData] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(true);
-  const [chatPosition, setChatPosition] = useState<'bottom' | 'right'>('bottom');
+  const [chatPosition, setChatPosition] = useState<'bottom-middle' | 'bottom-right'>('bottom-middle');
+  const [chatFullscreen, setChatFullscreen] = useState(false);
   const [expandedDiagram, setExpandedDiagram] = useState<{
     type: 'mermaid' | 'network' | 'wizard';
     content?: string;
@@ -37,7 +36,67 @@ export default function Home() {
     nodes?: FlowNode[];
     edges?: Edge[];
   } | null>(null);
+  const [searchInputRef, setSearchInputRef] = useState<HTMLInputElement | null>(null);
+  const [isOnline, setIsOnline] = useState(true);
 
+  // Apply light mode class to body
+  useEffect(() => {
+    if (isDarkMode) {
+      document.body.classList.remove('light-mode');
+    } else {
+      document.body.classList.add('light-mode');
+    }
+  }, [isDarkMode]);
+
+  // Online/offline status tracking
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    setIsOnline(navigator.onLine);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Mouse tracking for dynamic chat positioning
+  useEffect(() => {
+    const handleMouseMove = () => {
+      if (!isChatExpanded || chatFullscreen) return;
+    };
+
+    const handleClick = (e: MouseEvent) => {
+      if (!isChatExpanded || chatFullscreen) return;
+      
+      // If user clicks on content area, move chat to avoid overlap
+      const chatElement = document.getElementById('chat-interface');
+      if (chatElement && !chatElement.contains(e.target as Node)) {
+        const { innerWidth } = window;
+        const { clientX } = e;
+        
+        // Determine best position based on click location
+        // If clicking on the right side, move chat to bottom-middle
+        // If clicking on the left/center, move chat to bottom-right
+        const newPosition: typeof chatPosition = clientX > (innerWidth * 2) / 3 
+          ? 'bottom-middle' 
+          : 'bottom-right';
+        
+        setChatPosition(newPosition);
+      }
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('click', handleClick);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('click', handleClick);
+    };
+  }, [isChatExpanded, chatFullscreen]);
 
   // Filter documents based on search
   const filteredDocuments = useMemo(() => {
@@ -78,54 +137,15 @@ export default function Home() {
     }
   };
 
-  // Initialize system
+  // Initialize system - always use mock data
   useEffect(() => {
     const initializeSystem = async () => {
       try {
-        // Check for mock mode first
-        const savedMockMode = localStorage.getItem('javi-wiki-mock-mode');
-        if (savedMockMode === 'true') {
-          setUseMockData(true);
-          await initializeMockData();
-          return;
-        }
-
-        // Load config from environment or localStorage
-        const savedConfig = localStorage.getItem('javi-wiki-config');
-        if (savedConfig) {
-          const parsedConfig = JSON.parse(savedConfig);
-          setConfig(parsedConfig);
-          
-          // Initialize RAG engine
-          const rag = new SimpleRAGEngine({
-            llamaApiKey: parsedConfig.llamaApiKey,
-          });
-          setRagEngine(rag);
-
-          // Initialize markdown monitor
-          const markdownMonitor = new MarkdownMonitor(
-            {
-              owner: parsedConfig.repoOwner,
-              repo: parsedConfig.repoName,
-            },
-            parsedConfig.githubToken
-          );
-
-          // Set up event listeners
-          markdownMonitor.on('filesUpdated', handleFilesUpdated);
-          markdownMonitor.on('error', handleMonitorError);
-
-          setMonitor(markdownMonitor);
-          
-          // Start monitoring
-          await markdownMonitor.start();
-        } else {
-          // Show config needed message
-          setError('Configuration needed. Please set up your GitHub token, Llama API key, and repository details.');
-        }
+        // Always use mock data instead of requiring configuration
+        await initializeMockData();
       } catch (err) {
         console.error('Initialization error:', err);
-        setError('Failed to initialize system. Please check your configuration.');
+        setError('Failed to initialize system.');
       } finally {
         setIsLoading(false);
       }
@@ -142,38 +162,6 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Intentionally empty - initialization should only run once
 
-  const handleFilesUpdated = async (files: MarkdownFile[]) => {
-    try {
-      console.log(`Received ${files.length} updated files`);
-      
-      // Convert to WikiDocument format
-      const wikiDocs: WikiDocument[] = files.map(file => ({
-        path: file.path,
-        content: file.content,
-        lastModified: file.lastModified,
-        sha: file.sha,
-      }));
-
-      setDocuments(wikiDocs);
-
-      // Update RAG engine with new documents
-      if (ragEngine) {
-        await ragEngine.updateDocuments(files.map(f => ({
-          path: f.path,
-          content: f.content,
-        })));
-        console.log('RAG engine updated with new documents');
-      }
-    } catch (err) {
-      console.error('Error handling file updates:', err);
-      setError('Failed to process document updates');
-    }
-  };
-
-  const handleMonitorError = (err: Error) => {
-    console.error('Monitor error:', err);
-    setError(`Monitoring error: ${err.message}`);
-  };
 
   const handleChatMessage = async (message: string): Promise<string> => {
     if (!ragEngine || !ragEngine.isReady()) {
@@ -181,152 +169,123 @@ export default function Home() {
     }
 
     try {
+      // Check network connectivity
+      if (!navigator.onLine) {
+        return 'You appear to be offline. Please check your internet connection and try again.';
+      }
+
       const response = await ragEngine.query(message);
       return response;
     } catch (err) {
       console.error('Chat error:', err);
-      return 'I apologize, but I encountered an error processing your question. Please try again.';
+      
+      // Handle different types of errors
+      if (err instanceof TypeError && err.message.includes('fetch')) {
+        return 'Network error: Unable to connect to the AI service. Please check your internet connection and try again.';
+      }
+      
+      if (err instanceof Error && err.message.includes('timeout')) {
+        return 'Request timeout: The AI service is taking too long to respond. Please try again with a shorter question.';
+      }
+      
+      return 'I apologize, but I encountered an error processing your question. Please try again, and if the problem persists, try refreshing the page.';
     }
   };
 
-
-  const saveConfig = () => {
-    localStorage.setItem('javi-wiki-config', JSON.stringify(config));
-    localStorage.removeItem('javi-wiki-mock-mode');
-    // Reload page to reinitialize with new config
-    window.location.reload();
+  // Handle chat position toggle between two states
+  const handleChatPositionToggle = () => {
+    const newPosition = chatPosition === 'bottom-middle' ? 'bottom-right' : 'bottom-middle';
+    setChatPosition(newPosition);
   };
 
-  const enableMockMode = () => {
-    localStorage.setItem('javi-wiki-mock-mode', 'true');
-    localStorage.removeItem('javi-wiki-config');
-    window.location.reload();
+  // Handle fullscreen toggle
+  const handleChatFullscreenToggle = (fullscreen: boolean) => {
+    setChatFullscreen(fullscreen);
+    if (fullscreen) {
+      setIsChatExpanded(true);
+    }
   };
+
+  // Keyboard shortcuts handlers
+  const handleFocusSearch = () => {
+    searchInputRef?.focus();
+  };
+
+  const handleToggleChat = () => {
+    setIsChatExpanded(!isChatExpanded);
+  };
+
+  const handleToggleTheme = () => {
+    setIsDarkMode(!isDarkMode);
+  };
+
+  const handleToggleFullscreen = () => {
+    handleChatFullscreenToggle(!chatFullscreen);
+  };
+
+
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Initializing JAVI Wiki...</p>
-        </div>
-      </div>
-    );
-  }
+      <ErrorBoundary isDarkMode={isDarkMode}>
+        <div className={`min-h-screen flex items-center justify-center transition-colors duration-200 ${
+          isDarkMode ? 'bg-gray-900' : 'bg-white'
+        }`}>
+          <div className="text-center space-y-8">
+            {/* Enhanced Loading Animation */}
+            <LoadingSpinner 
+              isDarkMode={isDarkMode} 
+              size="xl" 
+              type="indexing"
+              message="Initializing JAVI Wiki"
+            />
 
-  if (error && !config.githubToken && !useMockData) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center p-6">
-        <div className="max-w-lg w-full">
-          <div className="bg-white border border-gray-200 rounded-xl p-8 shadow-sm">
-            {/* Header */}
-            <div className="text-center mb-8">
-              <div className="flex justify-center mb-6">
-                <Settings className="w-16 h-16 text-gray-600" />
-              </div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-3">
-                Setup Required
+            {/* Title */}
+            <div>
+              <h1 className={`text-4xl font-black mb-2 transition-colors duration-200 ${
+                isDarkMode ? 'text-white' : 'text-gray-900'
+              }`}>
+                <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 bg-clip-text text-transparent animate-pulse">
+                  JAVI Wiki
+                </span>
               </h1>
-              <p className="text-gray-600">
-                Configure your JAVI Wiki to get started
+              <p className={`text-lg font-medium transition-colors duration-200 ${
+                isDarkMode ? 'text-gray-300' : 'text-gray-600'
+              }`}>
+                Your AI-powered documentation assistant
               </p>
             </div>
 
-            {/* Configuration Form */}
-            <div className="space-y-6">
-              <div className="group">
-                <label className="block text-sm font-bold text-white mb-2">
-                  GitHub Token
-                </label>
-                <input
-                  type="password"
-                  value={config.githubToken}
-                  onChange={(e) => setConfig(prev => ({ ...prev, githubToken: e.target.value }))}
-                  placeholder="ghp_xxxxxxxxxxxx"
-                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all duration-300"
-                />
+            {/* Progress Indicator */}
+            <div className="space-y-3">
+              <div className={`w-80 h-2 rounded-full overflow-hidden mx-auto transition-colors duration-200 ${
+                isDarkMode ? 'bg-gray-700' : 'bg-gray-200'
+              }`}>
+                <div className={`h-full rounded-full indexing-progress transition-colors duration-200 ${
+                  isDarkMode 
+                    ? 'bg-gradient-to-r from-blue-400 to-purple-400' 
+                    : 'bg-gradient-to-r from-blue-500 to-purple-500'
+                }`}></div>
               </div>
-
-              <div className="group">
-                <label className="block text-sm font-bold text-white mb-2">
-                  Llama API Key
-                </label>
-                <input
-                  type="password"
-                  value={config.llamaApiKey}
-                  onChange={(e) => setConfig(prev => ({ ...prev, llamaApiKey: e.target.value }))}
-                  placeholder="Enter your Llama API key"
-                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all duration-300"
-                />
-              </div>
-
-              <div className="group">
-                <label className="block text-sm font-bold text-white mb-2">
-                  Repository Owner
-                </label>
-                <input
-                  type="text"
-                  value={config.repoOwner}
-                  onChange={(e) => setConfig(prev => ({ ...prev, repoOwner: e.target.value }))}
-                  placeholder="github-username"
-                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all duration-300"
-                />
-              </div>
-
-              <div className="group">
-                <label className="block text-sm font-bold text-white mb-2">
-                  Repository Name
-                </label>
-                <input
-                  type="text"
-                  value={config.repoName}
-                  onChange={(e) => setConfig(prev => ({ ...prev, repoName: e.target.value }))}
-                  placeholder="memo-repo"
-                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all duration-300"
-                />
-              </div>
-
-              <button
-                onClick={saveConfig}
-                disabled={!config.githubToken || !config.llamaApiKey || !config.repoOwner || !config.repoName}
-                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-4 px-6 rounded-xl font-bold text-lg hover:from-purple-500 hover:to-blue-500 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden shadow-lg"
-              >
-                <span className="relative z-10">Save Configuration</span>
-              </button>
-
-              {/* Divider */}
-              <div className="relative py-4">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-600"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-4 bg-gray-800 text-gray-400 font-medium">or</span>
-                </div>
-              </div>
-
-              {/* Demo Button */}
-              <button
-                onClick={enableMockMode}
-                className="w-full bg-gradient-to-r from-blue-600 to-green-600 text-white py-4 px-6 rounded-xl font-bold text-lg hover:from-blue-500 hover:to-green-500 transition-all duration-300 flex items-center justify-center gap-3 group relative overflow-hidden shadow-lg"
-              >
-                <Play className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                <span className="relative z-10">Try Demo with Mock Data</span>
-              </button>
-              
-              <p className="text-xs text-gray-400 text-center leading-relaxed">
-                Demo mode includes sample documentation from{' '}
-                <span className="text-purple-400 font-semibold">3 repositories</span> with{' '}
-                <span className="text-blue-400 font-semibold">JAVI chat functionality</span>
+              <p className={`text-sm transition-colors duration-200 ${
+                isDarkMode ? 'text-gray-500' : 'text-gray-400'
+              }`}>
+                Indexing documents and setting up intelligent search...
               </p>
             </div>
           </div>
+          
+          {/* Particle Background for loading screen */}
+          <ParticleBackground isDarkMode={isDarkMode} density={15} />
         </div>
-      </div>
+      </ErrorBoundary>
     );
   }
 
+
   return (
-    <div className={`min-h-screen transition-colors duration-200 ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
+    <ErrorBoundary isDarkMode={isDarkMode}>
+      <div className={`min-h-screen transition-colors duration-200 ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
       {/* Main Content */}
       <div className="h-screen flex flex-col">
         {/* Clean Top Bar */}
@@ -346,30 +305,72 @@ export default function Home() {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <div className={`flex items-center gap-2 rounded-full px-3 py-1 ${
-              isDarkMode ? 'bg-gray-800' : 'bg-gray-100'
-            }`}>
+            {/* Offline Indicator */}
+            {!isOnline && (
+              <div className={`flex items-center gap-2 rounded-full px-3 py-2 border ${
+                isDarkMode 
+                  ? 'bg-red-900/20 border-red-700/50 text-red-400' 
+                  : 'bg-red-50 border-red-200/50 text-red-600'
+              }`}>
+                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                <span className="text-xs font-medium">Offline</span>
+              </div>
+            )}
+            
+            <div className={`flex items-center gap-3 rounded-full px-4 py-2 border transition-all duration-300 ${
+              isDarkMode 
+                ? 'bg-gray-800/80 border-gray-600/50' 
+                : 'bg-white/80 border-gray-200/50'
+            } ${ragEngine?.isReady() ? '' : 'indexing-glow'}`}>
               {ragEngine?.isReady() ? (
                 <>
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className={`text-xs font-medium ${
-                    isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                  }`}>
-                    {ragEngine?.getIndexedDocumentCount()} docs
-                  </span>
+                  <div className="relative">
+                    <div className="w-3 h-3 bg-green-500 rounded-full indexing-pulse"></div>
+                    <div className="absolute inset-0 w-3 h-3 bg-green-400 rounded-full animate-ping opacity-75"></div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-bold ${
+                      isDarkMode ? 'text-green-400' : 'text-green-600'
+                    }`}>
+                      {ragEngine?.getIndexedDocumentCount()} docs indexed
+                    </span>
+                    <div className={`w-2 h-2 rounded-full ${
+                      isDarkMode ? 'bg-green-400' : 'bg-green-500'
+                    }`}></div>
+                  </div>
                 </>
               ) : (
                 <>
-                  <div className="flex items-center gap-1">
-                    <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse" style={{animationDelay: '0ms'}}></div>
-                    <div className="w-1 h-1 bg-blue-400 rounded-full animate-pulse" style={{animationDelay: '150ms'}}></div>
-                    <div className="w-1 h-1 bg-blue-300 rounded-full animate-pulse" style={{animationDelay: '300ms'}}></div>
+                  <div className="relative flex items-center">
+                    <div className={`w-4 h-4 border-2 border-t-transparent rounded-full indexing-spin ${
+                      isDarkMode ? 'border-blue-400' : 'border-blue-500'
+                    }`}></div>
                   </div>
-                  <span className={`text-xs font-medium ${
-                    isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-bold ${
+                      isDarkMode ? 'text-blue-400' : 'text-blue-600'
+                    }`}>
+                      Indexing docs
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <div className={`w-1.5 h-1.5 rounded-full indexing-dots ${
+                        isDarkMode ? 'bg-blue-400' : 'bg-blue-500'
+                      }`}></div>
+                      <div className={`w-1.5 h-1.5 rounded-full indexing-dots ${
+                        isDarkMode ? 'bg-blue-400' : 'bg-blue-500'
+                      }`} style={{animationDelay: '0.3s'}}></div>
+                      <div className={`w-1.5 h-1.5 rounded-full indexing-dots ${
+                        isDarkMode ? 'bg-blue-400' : 'bg-blue-500'
+                      }`} style={{animationDelay: '0.6s'}}></div>
+                    </div>
+                  </div>
+                  <div className={`h-1 w-16 rounded-full overflow-hidden ${
+                    isDarkMode ? 'bg-gray-700' : 'bg-gray-200'
                   }`}>
-                    Indexing docs...
-                  </span>
+                    <div className={`h-full rounded-full indexing-progress ${
+                      isDarkMode ? 'bg-blue-400' : 'bg-blue-500'
+                    }`}></div>
+                  </div>
                 </>
               )}
             </div>
@@ -455,6 +456,7 @@ export default function Home() {
                   isDarkMode ? 'text-gray-400' : 'text-gray-400'
                 }`} />
                 <input
+                  ref={setSearchInputRef}
                   type="text"
                   placeholder="Search documentation..."
                   value={searchTerm}
@@ -526,7 +528,9 @@ export default function Home() {
           {/* Main Content Area */}
           <div className={`flex-1 flex flex-col transition-colors duration-200 ${
             isDarkMode ? 'bg-gray-900' : 'bg-white'
-          } ${chatPosition === 'right' && isChatExpanded ? 'mr-96' : ''}`}>
+          } ${chatPosition === 'bottom-right' && isChatExpanded && !chatFullscreen ? 'mr-96' : ''} ${
+            chatFullscreen ? 'pointer-events-none' : ''
+          }`}>
             {expandedDiagram ? (
               <>
                 {/* Expanded Diagram Header */}
@@ -675,9 +679,21 @@ export default function Home() {
                 </div>
 
                 {/* Document Content */}
-                <div className="flex-1 overflow-y-auto p-6 pb-32">
-                  <div className="max-w-4xl mx-auto">
-                    <MarkdownRenderer content={selectedDocument.content} isDarkMode={isDarkMode} />
+                <div className="flex-1 overflow-y-auto">
+                  <div className="flex gap-8 p-6 pb-32">
+                    {/* Main Content */}
+                    <div className="flex-1 max-w-4xl">
+                      <MarkdownRenderer content={selectedDocument.content} isDarkMode={isDarkMode} />
+                    </div>
+                    
+                    {/* Table of Contents - Right Sidebar */}
+                    <div className="hidden lg:block w-80 flex-shrink-0">
+                      <TableOfContents 
+                        content={selectedDocument.content} 
+                        isDarkMode={isDarkMode}
+                        className="w-full"
+                      />
+                    </div>
                   </div>
                 </div>
               </>
@@ -716,11 +732,26 @@ export default function Home() {
             isDarkMode={isDarkMode}
             onDiagramExpand={setExpandedDiagram}
             position={chatPosition}
-            onPositionToggle={() => setChatPosition(chatPosition === 'bottom' ? 'right' : 'bottom')}
+            onPositionToggle={handleChatPositionToggle}
+            isFullscreen={chatFullscreen}
+            onToggleFullscreen={handleChatFullscreenToggle}
           />
 
         </div>
       </div>
-    </div>
+      
+      {/* Particle Background */}
+      <ParticleBackground isDarkMode={isDarkMode} density={25} />
+      
+      {/* Keyboard Shortcuts */}
+      <KeyboardShortcuts 
+        isDarkMode={isDarkMode}
+        onToggleChat={handleToggleChat}
+        onToggleTheme={handleToggleTheme}
+        onToggleFullscreen={handleToggleFullscreen}
+        onFocusSearch={handleFocusSearch}
+      />
+      </div>
+    </ErrorBoundary>
   );
 }
