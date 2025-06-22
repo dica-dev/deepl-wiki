@@ -5,6 +5,7 @@ from .push_agent import PushAgent
 from .index_repo_agent import IndexRepoAgent
 from .shared.llama_client import LlamaClient
 from .shared.chroma_manager import ChromaManager
+from .shared.database import DatabaseManager
 
 __version__ = "0.1.0"
 __all__ = [
@@ -13,4 +14,5 @@ __all__ = [
     "IndexRepoAgent",
     "LlamaClient",
     "ChromaManager",
+    "DatabaseManager",
 ]
