@@ -174,7 +174,10 @@ docs/
         repo_dir = base_path / "repos" / repo_name
         repo_dir.mkdir(exist_ok=True)
         
-        # Main repository README
+        # Parse the memo_content to extract individual documentation sections
+        docs = self._parse_memo_content(memo_content)
+        
+        # Generate main README (focused and concise)
         repo_readme = f"""# {repo_name}
 
 *Repository Documentation*
@@ -188,9 +191,15 @@ docs/
 - **Git Branch**: {metadata.get('git_branch', 'N/A')}
 - **Last Commit**: {metadata.get('last_commit', 'N/A')}
 
-## Documentation
+## Overview
 
-{memo_content}
+{docs.get('README.md', 'No overview available.')}
+
+## Documentation Files
+
+- **[Architecture](ARCHITECTURE.md)** - System design and components
+- **[Development Guide](DEVELOPMENT.md)** - Setup and contribution guidelines
+- **[Component Reference](COMPONENTS.md)** - Detailed API documentation
 
 ## File Extensions
 
@@ -222,8 +231,15 @@ The repository contains the following file types:
 *Last updated: {self.timestamp}*
 """
 
+        # Write main README
         with open(repo_dir / "README.md", "w", encoding="utf-8") as f:
             f.write(repo_readme)
+        
+        # Write separate documentation files
+        for doc_name, doc_content in docs.items():
+            if doc_name != 'README.md' and doc_content.strip():
+                with open(repo_dir / doc_name, "w", encoding="utf-8") as f:
+                    f.write(doc_content)
     
     def _generate_global_documentation(self, base_path: Path, repositories: List[Dict[str, Any]], general_memo: str):
         """Generate global system documentation."""
@@ -636,3 +652,53 @@ Total repositories: {len(repositories)}
         
         # Generate new mono repo
         return self.generate_mono_repo(output_dir, repositories, general_memo)
+    
+    def _parse_memo_content(self, memo_content: str) -> Dict[str, str]:
+        """Parse memo content to extract individual documentation sections."""
+        docs = {}
+        
+        # Split content by markdown headers that indicate separate files
+        sections = re.split(r'\n# ([A-Z_]+\.md)\n', memo_content)
+        
+        if len(sections) == 1:
+            # No clear file separations found, try to extract by common patterns
+            docs = self._extract_docs_by_pattern(memo_content)
+        else:
+            # Process sections found by file headers
+            current_content = sections[0].strip()  # Content before first header
+            
+            for i in range(1, len(sections), 2):
+                if i + 1 < len(sections):
+                    filename = sections[i]
+                    content = sections[i + 1].strip()
+                    docs[filename] = content
+            
+            # If there's initial content, treat it as README
+            if current_content:
+                docs['README.md'] = current_content
+        
+        return docs
+    
+    def _extract_docs_by_pattern(self, content: str) -> Dict[str, str]:
+        """Extract documentation sections by common patterns when file headers aren't clear."""
+        docs = {}
+        
+        # Try to find sections by common documentation patterns
+        patterns = {
+            'README.md': r'(?i)(?:^|\n)(?:#\s*)?(?:readme|overview|description|about).*?(?=\n#\s*(?:architecture|development|components|api)|$)',
+            'ARCHITECTURE.md': r'(?i)(?:^|\n)(?:#\s*)?(?:architecture|system\s+overview|design).*?(?=\n#\s*(?:development|components|api|readme)|$)',
+            'DEVELOPMENT.md': r'(?i)(?:^|\n)(?:#\s*)?(?:development|setup|installation|getting\s+started).*?(?=\n#\s*(?:architecture|components|api|readme)|$)',
+            'COMPONENTS.md': r'(?i)(?:^|\n)(?:#\s*)?(?:components?|api|reference|classes?|functions?).*?(?=\n#\s*(?:architecture|development|readme)|$)'
+        }
+        
+        for filename, pattern in patterns.items():
+            matches = re.findall(pattern, content, re.DOTALL | re.MULTILINE)
+            if matches:
+                # Take the longest match (most comprehensive)
+                docs[filename] = max(matches, key=len).strip()
+        
+        # If no patterns matched, put everything in README
+        if not docs:
+            docs['README.md'] = content
+        
+        return docs
