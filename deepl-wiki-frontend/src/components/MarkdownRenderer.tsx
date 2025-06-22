@@ -81,66 +81,138 @@ export default function MarkdownRenderer({ content, className = "", isDarkMode =
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeHighlight]}
         components={{
-          h1: ({ children }) => (
-            <h1 className={isChatMessage 
-              ? "text-lg font-bold mb-2 mt-2 first:mt-0" 
-              : isDarkMode 
-                ? "text-3xl font-bold text-white mb-6 mt-8 first:mt-0"
-                : "text-3xl font-bold text-gray-900 mb-6 mt-8 first:mt-0"
-            }>
-              {children}
-            </h1>
-          ),
-          h2: ({ children }) => (
-            <h2 className={isChatMessage 
-              ? "text-base font-semibold mb-2 mt-3" 
-              : isDarkMode
-                ? "text-2xl font-semibold text-gray-100 mb-4 mt-8"
-                : "text-2xl font-semibold text-gray-800 mb-4 mt-8"
-            }>
-              {children}
-            </h2>
-          ),
-          h3: ({ children }) => (
-            <h3 className={isChatMessage 
-              ? "text-sm font-medium mb-1 mt-2" 
-              : isDarkMode
-                ? "text-xl font-medium text-gray-200 mb-3 mt-6"
-                : "text-xl font-medium text-gray-700 mb-3 mt-6"
-            }>
-              {children}
-            </h3>
-          ),
-          h4: ({ children }) => (
-            <h4 className={isChatMessage 
-              ? "text-sm font-medium mb-1 mt-2" 
-              : isDarkMode
-                ? "text-lg font-medium text-gray-200 mb-2 mt-4"
-                : "text-lg font-medium text-gray-700 mb-2 mt-4"
-            }>
-              {children}
-            </h4>
-          ),
-          h5: ({ children }) => (
-            <h5 className={isChatMessage 
-              ? "text-sm font-medium mb-1 mt-2" 
-              : isDarkMode
-                ? "text-base font-medium text-gray-200 mb-2 mt-4"
-                : "text-base font-medium text-gray-700 mb-2 mt-4"
-            }>
-              {children}
-            </h5>
-          ),
-          h6: ({ children }) => (
-            <h6 className={isChatMessage 
-              ? "text-sm font-medium mb-1 mt-2" 
-              : isDarkMode
-                ? "text-sm font-medium text-gray-200 mb-2 mt-4"
-                : "text-sm font-medium text-gray-700 mb-2 mt-4"
-            }>
-              {children}
-            </h6>
-          ),
+          h1: ({ children }) => {
+            const text = React.Children.toArray(children).join('');
+            const id = text
+              .toLowerCase()
+              .replace(/[^\w\s-]/g, '')
+              .replace(/\s+/g, '-')
+              .trim();
+            
+            return (
+              <h1 
+                id={isChatMessage ? undefined : id}
+                className={isChatMessage 
+                  ? "text-lg font-bold mb-2 mt-2 first:mt-0" 
+                  : isDarkMode 
+                    ? "text-3xl font-bold text-white mb-6 mt-8 first:mt-0 scroll-mt-20"
+                    : "text-3xl font-bold text-gray-900 mb-6 mt-8 first:mt-0 scroll-mt-20"
+                }
+              >
+                {children}
+              </h1>
+            );
+          },
+          h2: ({ children }) => {
+            const text = React.Children.toArray(children).join('');
+            const id = text
+              .toLowerCase()
+              .replace(/[^\w\s-]/g, '')
+              .replace(/\s+/g, '-')
+              .trim();
+            
+            return (
+              <h2 
+                id={isChatMessage ? undefined : id}
+                className={isChatMessage 
+                  ? "text-base font-semibold mb-2 mt-3" 
+                  : isDarkMode
+                    ? "text-2xl font-semibold text-gray-100 mb-4 mt-8 scroll-mt-20"
+                    : "text-2xl font-semibold text-gray-800 mb-4 mt-8 scroll-mt-20"
+                }
+              >
+                {children}
+              </h2>
+            );
+          },
+          h3: ({ children }) => {
+            const text = React.Children.toArray(children).join('');
+            const id = text
+              .toLowerCase()
+              .replace(/[^\w\s-]/g, '')
+              .replace(/\s+/g, '-')
+              .trim();
+            
+            return (
+              <h3 
+                id={isChatMessage ? undefined : id}
+                className={isChatMessage 
+                  ? "text-sm font-medium mb-1 mt-2" 
+                  : isDarkMode
+                    ? "text-xl font-medium text-gray-200 mb-3 mt-6 scroll-mt-20"
+                    : "text-xl font-medium text-gray-700 mb-3 mt-6 scroll-mt-20"
+                }
+              >
+                {children}
+              </h3>
+            );
+          },
+          h4: ({ children }) => {
+            const text = React.Children.toArray(children).join('');
+            const id = text
+              .toLowerCase()
+              .replace(/[^\w\s-]/g, '')
+              .replace(/\s+/g, '-')
+              .trim();
+            
+            return (
+              <h4 
+                id={isChatMessage ? undefined : id}
+                className={isChatMessage 
+                  ? "text-sm font-medium mb-1 mt-2" 
+                  : isDarkMode
+                    ? "text-lg font-medium text-gray-200 mb-2 mt-4 scroll-mt-20"
+                    : "text-lg font-medium text-gray-700 mb-2 mt-4 scroll-mt-20"
+                }
+              >
+                {children}
+              </h4>
+            );
+          },
+          h5: ({ children }) => {
+            const text = React.Children.toArray(children).join('');
+            const id = text
+              .toLowerCase()
+              .replace(/[^\w\s-]/g, '')
+              .replace(/\s+/g, '-')
+              .trim();
+            
+            return (
+              <h5 
+                id={isChatMessage ? undefined : id}
+                className={isChatMessage 
+                  ? "text-sm font-medium mb-1 mt-2" 
+                  : isDarkMode
+                    ? "text-base font-medium text-gray-200 mb-2 mt-4 scroll-mt-20"
+                    : "text-base font-medium text-gray-700 mb-2 mt-4 scroll-mt-20"
+                }
+              >
+                {children}
+              </h5>
+            );
+          },
+          h6: ({ children }) => {
+            const text = React.Children.toArray(children).join('');
+            const id = text
+              .toLowerCase()
+              .replace(/[^\w\s-]/g, '')
+              .replace(/\s+/g, '-')
+              .trim();
+            
+            return (
+              <h6 
+                id={isChatMessage ? undefined : id}
+                className={isChatMessage 
+                  ? "text-sm font-medium mb-1 mt-2" 
+                  : isDarkMode
+                    ? "text-sm font-medium text-gray-200 mb-2 mt-4 scroll-mt-20"
+                    : "text-sm font-medium text-gray-700 mb-2 mt-4 scroll-mt-20"
+                }
+              >
+                {children}
+              </h6>
+            );
+          },
           p: ({ children }) => (
             <p className={isChatMessage 
               ? "mb-2 leading-relaxed" 
