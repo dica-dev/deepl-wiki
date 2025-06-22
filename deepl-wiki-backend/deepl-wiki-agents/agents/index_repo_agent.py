@@ -597,51 +597,42 @@ class DocumentationGenerator:
         return docs
     
     def _generate_readme(
-        self, 
-        repo_path: str, 
+        self,
+        repo_path: str,
         repo_metadata: Dict[str, Any],
         ast_analysis: Dict[str, ASTAnalysis],
         file_contents: List[Dict[str, Any]]
     ) -> str:
-        """Generate comprehensive README."""
+        """Generate focused README for project overview and getting started."""
         
         repo_name = Path(repo_path).name
         
-        # Prepare context for AI generation
-        context = self._prepare_context(repo_path, repo_metadata, ast_analysis, file_contents)
+        # Prepare focused context for README
+        context = self._prepare_readme_context(repo_path, repo_metadata, ast_analysis, file_contents)
         
-        prompt = f"""You are a technical documentation expert. Generate a comprehensive, detailed README.md for the repository: {repo_name}
+        prompt = f"""You are a technical documentation expert. Generate a focused README.md for the repository: {repo_name}
 
-IMPORTANT: Use the detailed repository context below to create specific, accurate documentation. Do not use generic placeholders or vague descriptions.
+IMPORTANT: Create a concise, user-focused README that helps users understand what this project is and how to get started. Do NOT include detailed API documentation, architecture details, or component lists - those belong in separate files.
 
 Repository Context:
 {context}
 
-Create a professional README that includes:
+Create a professional README that includes ONLY:
 
-1. **Project Description**: Based on the actual code structure and existing documentation, explain what this project does, its main purpose, and key value proposition.
-
-2. **Key Features**: List specific features based on the classes, functions, and APIs found in the codebase. Be concrete and specific.
-
-3. **Installation & Setup**: Provide detailed installation instructions based on the configuration files found (requirements.txt, package.json, etc.). Include prerequisites and step-by-step setup.
-
-4. **Usage Examples**: Create realistic usage examples based on the actual API endpoints, main functions, and entry points discovered in the code.
-
-5. **Architecture Overview**: Describe the actual architecture based on the code structure, classes, and dependencies found. Include component relationships.
-
-6. **API Documentation**: If APIs were found, provide a summary with actual endpoints, methods, and descriptions from the code.
-
-7. **Development Guide**: Include information about the development environment, testing, and contribution guidelines based on the project structure.
-
-8. **Configuration**: Document any configuration options found in config files or environment variables.
+1. **Project Title and Brief Description**: 1-2 sentences explaining what this project does
+2. **Key Features**: 3-5 bullet points of main functionality (high-level, not technical details)
+3. **Installation & Setup**: Step-by-step installation instructions with prerequisites
+4. **Quick Start**: Basic usage example to get users started immediately
+5. **Configuration**: Essential configuration options users need to know
+6. **Links to Other Documentation**: References to ARCHITECTURE.md, API.md, DEVELOPMENT.md, etc.
 
 REQUIREMENTS:
-- Use specific information from the repository context
-- Include actual class names, function names, and API endpoints where relevant
-- Make it detailed and comprehensive, not generic
-- Use proper markdown formatting with clear sections
-- Include code examples where appropriate
-- Be professional and developer-friendly
+- Keep it concise and user-focused
+- Focus on getting users started quickly
+- Avoid technical implementation details
+- Maximum 100 lines
+- Include actual project-specific information, not generic templates
+- Reference other documentation files for detailed information
 
 README Content:"""
 
@@ -693,90 +684,104 @@ README Content:"""
         )
     
     def _generate_architecture_docs(
-        self, 
-        repo_path: str, 
+        self,
+        repo_path: str,
         ast_analysis: Dict[str, ASTAnalysis],
         repo_metadata: Dict[str, Any]
     ) -> str:
-        """Generate architecture documentation."""
+        """Generate focused architecture documentation."""
         
-        # Collect all classes and their relationships
-        all_classes = []
-        all_functions = []
-        dependencies = {}
+        repo_name = Path(repo_path).name
         
-        for file_path, analysis in ast_analysis.items():
-            all_classes.extend(analysis.classes)
-            all_functions.extend(analysis.functions)
-            dependencies[file_path] = analysis.imports
+        # Prepare architecture-focused context
+        context = self._prepare_architecture_context(repo_path, repo_metadata, ast_analysis)
         
-        components_info = f"""
-## Classes ({len(all_classes)} total)
+        prompt = f"""You are a software architect. Generate focused architecture documentation for: {repo_name}
 
-{self._format_classes_list(all_classes)}
+IMPORTANT: Create architecture documentation that explains the system design, not detailed code listings. Focus on high-level structure, patterns, and relationships.
 
-## Functions ({len(all_functions)} total)
+Repository Context:
+{context}
 
-{self._format_functions_list(all_functions)}
+Create architecture documentation that includes:
 
-## Dependencies
+1. **System Overview**: High-level description of the system architecture and design patterns used
+2. **Core Components**: Main architectural components and their responsibilities (not individual classes)
+3. **Data Flow**: How data moves through the system
+4. **Technology Stack**: Key technologies, frameworks, and libraries used
+5. **Design Patterns**: Architectural patterns and design decisions
+6. **Integration Points**: How different parts of the system interact
 
-{self._format_dependencies(dependencies)}
-"""
-        
-        return self.templates['architecture'].format(
-            overview=f"Architecture documentation for {Path(repo_path).name}",
-            components=components_info,
-            data_flow="Data flow analysis requires manual review of the codebase.",
-            dependencies=self._format_dependencies(dependencies)
-        )
+REQUIREMENTS:
+- Focus on architecture and design, not implementation details
+- Explain the "why" behind architectural decisions
+- Use diagrams or ASCII art where helpful
+- Keep it focused on system design
+- Maximum 150 lines
+- Avoid listing every single class and function
+
+Architecture Documentation:"""
+
+        try:
+            arch_content = self.llama_client.chat_completion(
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+                max_tokens=3000
+            )
+            return arch_content
+        except Exception as e:
+            return f"# Architecture Documentation\n\nFailed to generate architecture docs: {str(e)}"
     
     def _generate_development_docs(
-        self, 
-        repo_path: str, 
+        self,
+        repo_path: str,
         repo_metadata: Dict[str, Any],
         ast_analysis: Dict[str, ASTAnalysis]
     ) -> str:
-        """Generate development documentation."""
+        """Generate comprehensive development documentation."""
         
-        primary_language = repo_metadata.get('primary_language', 'Unknown')
+        repo_name = Path(repo_path).name
         
-        setup_info = f"""
-### Prerequisites
-- {primary_language} development environment
-- Dependencies listed in requirements/package files
+        # Prepare development-focused context
+        context = self._prepare_development_context(repo_path, repo_metadata, ast_analysis)
+        
+        prompt = f"""You are a development team lead. Generate comprehensive development documentation for: {repo_name}
 
-### Installation
-1. Clone the repository
-2. Install dependencies
-3. Configure environment variables (if any)
-"""
-        
-        building_info = f"""
-### Build Process
-Based on the {primary_language} project structure, follow standard build practices for this language.
-"""
-        
-        testing_info = """
-### Testing
-Run tests according to the project's testing framework.
-"""
-        
-        contributing_info = """
-### Contributing Guidelines
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-"""
-        
-        return self.templates['development'].format(
-            setup=setup_info,
-            building=building_info,
-            testing=testing_info,
-            contributing=contributing_info
-        )
+IMPORTANT: Create practical development documentation that helps developers contribute to this project. Focus on setup, workflows, and development practices.
+
+Repository Context:
+{context}
+
+Create development documentation that includes:
+
+1. **Development Setup**: Detailed setup instructions for developers
+2. **Project Structure**: Explanation of how the codebase is organized
+3. **Development Workflow**: How to develop, test, and contribute
+4. **Build Process**: How to build and run the project
+5. **Testing**: How to run tests and add new tests
+6. **Code Standards**: Coding conventions and best practices
+7. **Debugging**: How to debug and troubleshoot issues
+8. **Contributing**: Guidelines for contributing to the project
+
+REQUIREMENTS:
+- Provide specific, actionable instructions
+- Include actual commands and file paths where relevant
+- Focus on developer productivity
+- Include troubleshooting tips
+- Maximum 200 lines
+- Be practical and developer-focused
+
+Development Guide:"""
+
+        try:
+            dev_content = self.llama_client.chat_completion(
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+                max_tokens=4000
+            )
+            return dev_content
+        except Exception as e:
+            return f"# Development Guide\n\nFailed to generate development docs: {str(e)}"
     
     def _generate_component_docs(self, repo_path: str, ast_analysis: Dict[str, ASTAnalysis]) -> str:
         """Generate detailed component documentation."""
@@ -954,6 +959,159 @@ Run tests according to the project's testing framework.
             if file_info.get('extension') in ['.py', '.js', '.ts', '.java']:
                 context += f"\n### {file_info['path']} ({file_info['size']} bytes)\n"
                 context += f"```{file_info.get('extension', '').replace('.', '')}\n{file_info['content'][:1000]}...\n```\n"
+        
+        return context
+    
+    def _prepare_readme_context(
+        self,
+        repo_path: str,
+        repo_metadata: Dict[str, Any],
+        ast_analysis: Dict[str, ASTAnalysis],
+        file_contents: List[Dict[str, Any]]
+    ) -> str:
+        """Prepare focused context for README generation."""
+        
+        repo_name = Path(repo_path).name
+        context = f"""
+# Repository: {repo_name}
+
+## Basic Information
+- **Primary Language**: {repo_metadata.get('primary_language', 'Unknown')}
+- **Total Files**: {repo_metadata.get('file_count', 0)}
+- **Configuration Files**: {', '.join(repo_metadata.get('config_files', [])[:3])}
+
+## Key Features (from code analysis)
+"""
+        
+        # Add key features based on APIs and main classes
+        all_apis = []
+        key_classes = []
+        
+        for file_path, analysis in ast_analysis.items():
+            all_apis.extend(analysis.apis)
+            # Get main classes (not utility classes)
+            for cls in analysis.classes:
+                if not any(word in cls['name'].lower() for word in ['util', 'helper', 'test']):
+                    key_classes.append(cls['name'])
+        
+        if all_apis:
+            context += f"- REST API with {len(all_apis)} endpoints\n"
+        if key_classes:
+            context += f"- Core components: {', '.join(key_classes[:5])}\n"
+        
+        # Add existing documentation content if available
+        for file_info in file_contents:
+            if file_info.get('extension') in ['.md', '.txt'] and 'readme' in file_info['path'].lower():
+                context += f"\n## Existing README Content\n{file_info['content'][:500]}...\n"
+                break
+        
+        return context
+    
+    def _prepare_architecture_context(
+        self,
+        repo_path: str,
+        repo_metadata: Dict[str, Any],
+        ast_analysis: Dict[str, ASTAnalysis]
+    ) -> str:
+        """Prepare architecture-focused context."""
+        
+        repo_name = Path(repo_path).name
+        context = f"""
+# Architecture Analysis: {repo_name}
+
+## Technology Stack
+- **Primary Language**: {repo_metadata.get('primary_language', 'Unknown')}
+- **Configuration Files**: {', '.join(repo_metadata.get('config_files', []))}
+
+## System Components
+"""
+        
+        # Analyze architectural patterns
+        all_classes = []
+        all_apis = []
+        patterns = set()
+        
+        for file_path, analysis in ast_analysis.items():
+            all_classes.extend(analysis.classes)
+            all_apis.extend(analysis.apis)
+            
+            # Detect patterns
+            for cls in analysis.classes:
+                name = cls['name'].lower()
+                if 'manager' in name:
+                    patterns.add('Manager Pattern')
+                elif 'agent' in name:
+                    patterns.add('Agent Pattern')
+                elif 'client' in name:
+                    patterns.add('Client Pattern')
+                elif 'generator' in name:
+                    patterns.add('Generator Pattern')
+        
+        context += f"- **Total Classes**: {len(all_classes)}\n"
+        context += f"- **API Endpoints**: {len(all_apis)}\n"
+        context += f"- **Design Patterns**: {', '.join(patterns) if patterns else 'Standard OOP'}\n"
+        
+        # Add key architectural components
+        key_components = []
+        for cls in all_classes:
+            if any(word in cls['name'].lower() for word in ['manager', 'agent', 'client', 'generator', 'service']):
+                key_components.append(cls['name'])
+        
+        if key_components:
+            context += f"\n## Key Components\n"
+            for comp in key_components[:10]:
+                context += f"- {comp}\n"
+        
+        return context
+    
+    def _prepare_development_context(
+        self,
+        repo_path: str,
+        repo_metadata: Dict[str, Any],
+        ast_analysis: Dict[str, ASTAnalysis]
+    ) -> str:
+        """Prepare development-focused context."""
+        
+        repo_name = Path(repo_path).name
+        context = f"""
+# Development Context: {repo_name}
+
+## Project Structure
+- **Primary Language**: {repo_metadata.get('primary_language', 'Unknown')}
+- **Total Files**: {repo_metadata.get('file_count', 0)}
+- **Code Files**: {repo_metadata.get('code_files', 0)}
+- **Test Files**: {repo_metadata.get('test_files', 0)}
+
+## Configuration Files Found
+{chr(10).join(f'- {config}' for config in repo_metadata.get('config_files', [])[:10])}
+
+## Development Tools Detected
+"""
+        
+        # Detect development tools from config files
+        config_files = repo_metadata.get('config_files', [])
+        tools = []
+        
+        for config in config_files:
+            if 'requirements.txt' in config or 'pyproject.toml' in config:
+                tools.append('Python pip/poetry')
+            elif 'package.json' in config:
+                tools.append('Node.js/npm')
+            elif 'Dockerfile' in config:
+                tools.append('Docker')
+            elif 'Makefile' in config:
+                tools.append('Make build system')
+        
+        if tools:
+            context += '\n'.join(f'- {tool}' for tool in tools)
+        else:
+            context += '- Standard development setup'
+        
+        # Add complexity info
+        total_functions = sum(len(analysis.functions) for analysis in ast_analysis.values())
+        context += f"\n\n## Codebase Complexity\n"
+        context += f"- **Total Functions**: {total_functions}\n"
+        context += f"- **Total Classes**: {sum(len(analysis.classes) for analysis in ast_analysis.values())}\n"
         
         return context
     
