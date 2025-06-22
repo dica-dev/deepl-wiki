@@ -2,7 +2,9 @@
 
 import os
 import hashlib
+import time
 from typing import List, Dict, Any, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import chromadb
 from chromadb.config import Settings
 from chromadb.utils import embedding_functions
@@ -36,22 +38,47 @@ class ChromaManager:
         )
     
     def add_documents(
-        self, 
-        documents: List[str], 
+        self,
+        documents: List[str],
         metadatas: List[Dict[str, Any]],
-        ids: Optional[List[str]] = None
+        ids: Optional[List[str]] = None,
+        batch_size: int = 4000
     ) -> None:
-        """Add documents to the collection."""
+        """Add documents to the collection in batches to avoid size limits."""
         if ids is None:
             ids = [self._generate_id(doc) for doc in documents]
         
         assert len(documents) == len(metadatas) == len(ids)
         
-        self.collection.add(
-            documents=documents,
-            metadatas=metadatas,
-            ids=ids
-        )
+        # Process documents in batches to avoid ChromaDB batch size limits
+        total_docs = len(documents)
+        for i in range(0, total_docs, batch_size):
+            end_idx = min(i + batch_size, total_docs)
+            
+            batch_documents = documents[i:end_idx]
+            batch_metadatas = metadatas[i:end_idx]
+            batch_ids = ids[i:end_idx]
+            
+            try:
+                self.collection.add(
+                    documents=batch_documents,
+                    metadatas=batch_metadatas,
+                    ids=batch_ids
+                )
+                print(f"Successfully added batch {i//batch_size + 1}/{(total_docs + batch_size - 1)//batch_size} ({len(batch_documents)} documents)")
+            except Exception as e:
+                print(f"Failed to add batch {i//batch_size + 1}: {str(e)}")
+                # Try with smaller batch size if this batch fails
+                if batch_size > 100:
+                    print(f"Retrying with smaller batch size...")
+                    self.add_documents(
+                        batch_documents,
+                        batch_metadatas,
+                        batch_ids,
+                        batch_size=batch_size//2
+                    )
+                else:
+                    raise e
     
     def search(
         self, 
@@ -74,9 +101,9 @@ class ChromaManager:
         }
     
     def add_repo_memo(
-        self, 
-        repo_path: str, 
-        memo_content: str, 
+        self,
+        repo_path: str,
+        memo_content: str,
         repo_metadata: Dict[str, Any]
     ) -> None:
         """Add a repository memo to the collection."""
@@ -100,7 +127,9 @@ class ChromaManager:
             chunk_id = f"{repo_path}_{i}_{self._generate_id(chunk)}"
             ids.append(chunk_id)
         
-        self.add_documents(documents, metadatas, ids)
+        # Use batched processing to avoid ChromaDB size limits
+        print(f"Adding {len(documents)} document chunks for {repo_path}")
+        self.add_documents(documents, metadatas, ids, batch_size=4000)
     
     def search_repos(
         self, 
